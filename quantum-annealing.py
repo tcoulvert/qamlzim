@@ -1,18 +1,30 @@
+#!/usr/bin/env python3
+
 import numpy as np
 from scipy.optimize import basinhopping
 from sklearn.metrics import accuracy_score
 
 from contextlib import closing
-from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
-from dwave_sapi2.fix_variables import fix_variables
+# potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
+# from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
+from dimod import fix_variables, BinaryQuadraticModel as BQM
+import dimod
+# from dwave_sapi2.fix_variables import fix_variables
 from multiprocessing import Pool
-import dwave_sapi2.remote
-from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
-from dwave_sapi2.util import get_hardware_adjacency
-from dwave_sapi2.core import solve_ising, await_completion
+from dwave.cloud import Client 
+# import dwave_sapi2.remote
+from minorminer import find_embedding
+from dwave.embedding import embed_ising, unembed_sampleset
+# from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
+from dwave.system.samplers import DWaveSampler
+# from dwave_sapi2.util import get_hardware_adjacency
+# need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
+#from dwave_sapi2.core import solve_ising, await_completion
 import os
 import datetime
 import time
+
+a=3
 
 
 a_time = 5
@@ -21,7 +33,8 @@ start_num = 9
 end_num = 10
 
 zoom_factor = 0.5
-n_iterations = 8
+n_iterations = 1 
+# n_iterations = 8
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
@@ -61,8 +74,10 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 
 
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
-    url = "https://usci.qcc.isi.edu/sapi"
-    token = "your-token"
+    url = "https://cloud.dwavesys.com/sapi"
+    token = os.environ["DWAVE_TOKEN"]
+    if not len(token):
+        print("error getting token")
     
     h = np.zeros(len(C_i))
     J = {}
@@ -71,7 +86,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         for j in range(len(C_ij[0])):
             if j > i:
                 J[(i, j)] = 2*C_ij[i][j]*sigma[i]*sigma[j]
-            h_i += 2*(sigma[i]*C_ij[i][j]*mu[j])
+            h_i += 2*(sigma[i]*C_ij[i][j]*mu[j]) 
         h[i] = h_i
 
     vals = np.array(J.values())
@@ -86,6 +101,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     isingpartial = []
 
     if FIXING_VARIABLES:
+        bqm = BQM.from_ising(h, J, offset) #potentially need to rework in order for func to get params
+        fixed_dict = dimod.fix_variables(bqm)
+        # end of new Ocean SDK
         Q, _  = ising_to_qubo(h, J)
         simple = fix_variables(Q, method='standard')
         new_Q = simple['new_Q']
@@ -96,8 +114,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         while cant_connect:
             try:
                 print('about to call remote')
-                conn = dwave_sapi2.remote.RemoteConnection(url, token)
-                solver = conn.get_solver("DW2X")
+                conn = Client(endpoint=url, token=token)
+                sampler = DWaveSampler(endpoint = url, token = token) 
+                # solver = conn.get_solver("DW2X")
                 print('called remote', conn)
                 cant_connect = False
             except IOError:
@@ -105,7 +124,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 time.sleep(10)
                 cant_connect = True
 
-        A = get_hardware_adjacency(solver)
+        A = sampler.adjacency 
+        # A = get_hardware_adjacency(solver)
         
         mapping = []
         offset = 0
@@ -135,9 +155,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                         if (i, j) in J:
                             J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
             
-                embeddings = find_embedding(J.keys(), A)
+                embedding = find_embedding(J.keys(), A)
                 try:
-                    (h0, j0, jc, new_emb) = embed_problem(h_gauge, J_gauge, embeddings, A, True, True)
+                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, target)
+                    # (h0, j0, jc, new_emb) = embed_problem(h_gauge, J_gauge, embeddings, A, True, True)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
@@ -161,7 +182,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             try_again = True
             while try_again:
                 try:
-                    qaresult = solve_ising(solver, h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    sampler = DWaveSampler()
+                    response = sampler.sample_ising(h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    # qaresult = solve_ising(solver, h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
                     print('runtime or ioerror, trying again')
@@ -169,7 +192,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum done")
 
-            qaresult = np.array(unembed_answer(qaresult["solutions"], new_emb, 'vote', h_gauge, J_gauge))
+            samples = unembed_sampleset(embedded, embedding, bqm)
+            # qaresult = np.array(unembed_answer(qaresult["solutions"], new_emb, 'vote', h_gauge, J_gauge))
             qaresult = qaresult * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
         
