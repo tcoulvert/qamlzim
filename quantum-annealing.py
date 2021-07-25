@@ -1,30 +1,35 @@
 #!/usr/bin/env python3
 
+import datetime
+import os
+import sys
+import time
+
 import numpy as np
 from scipy.optimize import basinhopping
 from sklearn.metrics import accuracy_score
+sys.exit(1)
 
 from contextlib import closing
-# potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
-# from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
-from dimod import fix_variables, BinaryQuadraticModel as BQM
-import dimod
-# from dwave_sapi2.fix_variables import fix_variables
-from multiprocessing import Pool
-from dwave.cloud import Client 
-# import dwave_sapi2.remote
-from minorminer import find_embedding
-from dwave.embedding import embed_ising, unembed_sampleset
-# from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
-from dwave.system.samplers import DWaveSampler
-# from dwave_sapi2.util import get_hardware_adjacency
-# need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
-#from dwave_sapi2.core import solve_ising, await_completion
-import os
-import datetime
-import time
 
-a=3
+USE_DWAVE = False
+
+if USE_DWAVE:
+    # potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
+    # from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
+    from dimod import fix_variables, BinaryQuadraticModel as BQM
+    import dimod
+    # from dwave_sapi2.fix_variables import fix_variables
+    from multiprocessing import Pool
+    from dwave.cloud import Client 
+    # import dwave_sapi2.remote
+    from minorminer import find_embedding
+    from dwave.embedding import embed_ising, unembed_sampleset
+    # from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
+    from dwave.system.samplers import DWaveSampler
+    # from dwave_sapi2.util import get_hardware_adjacency
+    # need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
+    #from dwave_sapi2.core import solve_ising, await_completion
 
 
 a_time = 5
