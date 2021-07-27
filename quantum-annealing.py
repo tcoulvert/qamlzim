@@ -8,7 +8,7 @@ import time
 import numpy as np
 from scipy.optimize import basinhopping
 from sklearn.metrics import accuracy_score
-sys.exit(1)
+#sys.exit(1)
 
 from contextlib import closing
 
@@ -279,18 +279,24 @@ def ensemble(predictions, weights):
         return np.sign(np.dot(predictions.T, weights))
     else:
         return np.sign(np.dot(predictions.T, weights/2 + 0.5)/n_classifiers)
+
+# Step 1: Load Background and Signal data
 print('loading data')
 sig = np.loadtxt('sig.csv')
 bkg = np.loadtxt('bkg.csv')
+# 1 - After loading, Calculate the percentage of bkg and sig out of the total data (combination of the two)
 sig_pct = float(len(sig)) / (len(sig) + len(bkg))
 bkg_pct = float(len(bkg)) / (len(sig) + len(bkg))
 print('loaded data')
 
+# Step 2: Initialize n-folds variable and num outside of the for-loop
 n_folds = 10
 num = 0
 
+#Step 3: Loop over all the different training sizes (var created below imports)
 for train_size in train_sizes:
     print('training with size', train_size)
+    # 3 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
     bkg_indices = np.arange(len(bkg))
     
