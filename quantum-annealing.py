@@ -284,7 +284,7 @@ def ensemble(predictions, weights):
 print('loading data')
 sig = np.loadtxt('sig.csv')
 bkg = np.loadtxt('bkg.csv')
-# 1 - After loading, Calculate the percentage of bkg and sig out of the total data (combination of the two)
+# 1.1 - After loading, Calculate the percentage of bkg and sig out of the total data (combination of the two)
 sig_pct = float(len(sig)) / (len(sig) + len(bkg))
 bkg_pct = float(len(bkg)) / (len(sig) + len(bkg))
 print('loaded data')
@@ -296,35 +296,47 @@ num = 0
 #Step 3: Loop over all the different training sizes (var created below imports)
 for train_size in train_sizes:
     print('training with size', train_size)
-    # 3 - Create arrays with sizes equal to the sizes of bkg and sig
+    # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
     bkg_indices = np.arange(len(bkg))
     
+    # 3.2 - Create indexing vars with sizes equal to the sizes of the recently created "indices" arrays, and bkg and sig datas
     remaining_sig = sig_indices
     remaining_bkg = bkg_indices
+
+    # 3.3 - generate folds(what are folds??) using 0 as the seed -> potentially use a different quantum algorithm
+    #        to generate actual random numbers
     fold_generator = np.random.RandomState(0)
+
+    #Step 5: iterate over the number of folds
     for f in range(n_folds):
-        if num >= end_num:
+        if num >= end_num: # end num declared and defined below imports 
             break
         print('fold', f)
+        # 5.1 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
+        #        determined by the iteration of train_size * data pct
         train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
         train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
         
+        # 5.2 - update "remaining" arrays for next loop by deleting the already sampled data
         remaining_sig = np.delete(remaining_sig, train_sig)
         remaining_bkg = np.delete(remaining_bkg, train_bkg)
         
+        # 5.3 - create/update "test" arrays by deleting the already sampled data
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
 
+        # 5.4 - create "train" and "test" vars to divide up data???
         predictions_train, y_train = create_augmented_data(sig[train_sig], bkg[train_bkg])
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         print('split data')
         
+        # 5.5 - increment num
         if num < start_num:
             num += 1
             continue
 
-        # create C_ij and C_i matrices
+        # 5.6 - create C_ij and C_i matrices
         n_classifiers = len(predictions_train)
         C_ij = np.zeros((n_classifiers, n_classifiers))
         C_i = np.dot(predictions_train, y_train)
@@ -334,7 +346,7 @@ for train_size in train_sizes:
 
         print('created C_ij and C_i matrices')
 
-
+        # 5.7 - Create/update ML vars based on matrices
         mu0 = np.zeros(n_classifiers)
         sigma0 = np.ones(n_classifiers)
         mu = np.copy(mu0)
