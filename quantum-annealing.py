@@ -51,6 +51,7 @@ AUGMENT_OFFSET = 0.0075
 
 FIXING_VARIABLES = True
 
+# Entire function is broken, none of the vars/methods are defined, they are only referenced, potentially don't need???
 def hamiltonian_checker(s, C_i, C_ij, reg):
     if POS_WEIGHTS:
         return hamiltonian_orig_posweights(s, C_i, C_ij, reg)
@@ -108,6 +109,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     # Likely need to completely re-do
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J, offset) #potentially need to rework in order for func to get params
+        # "offset" not declared, only referenced, bc might 
+        #  be desired in new embed func but wasn't possible in previous func
         fixed_dict = dimod.fix_variables(bqm)
         # end of new Ocean SDK
         Q, _  = ising_to_qubo(h, J)
@@ -164,7 +167,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 embedding = find_embedding(J.keys(), A)
                 try:
                     # Likely need to completely re-do
-                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, target)
+                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, target) 
+                    # "target" not declared, only referenced, bc might 
+                    #  be desired in new embed func but wasn't possible in previous func
                     # (h0, j0, jc, new_emb) = embed_problem(h_gauge, J_gauge, embeddings, A, True, True)
                     embedded = True
                     break
@@ -177,13 +182,13 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 continue
             
             # adjust chain strength
-            for k, v in j0.items():
-                j0[k] /= strength_scale
-            for i in range(len(h0)):
-                h0[i] /= strength_scale
+            for k, v in j0.items(): # "j0" not returned anymore bc embed func changed
+                j0[k] /= strength_scale # "j0" not returned anymore bc embed func changed
+            for i in range(len(h0)): # "h0" not returned anymore bc embed func changed
+                h0[i] /= strength_scale # "h0" not returned anymore bc embed func changed
 
-            emb_j = j0.copy()
-            emb_j.update(jc)
+            emb_j = j0.copy() # "j0" not returned anymore bc embed func changed
+            emb_j.update(jc) # "jc" not returned anymore bc embed func changed
         
             print("Quantum annealing")
             try_again = True
@@ -191,6 +196,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 try:
                     sampler = DWaveSampler()
                     response = sampler.sample_ising(h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    # "h0" not returned anymore bc embed func changed
                     # qaresult = solve_ising(solver, h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
@@ -208,14 +214,14 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             j = 0
             for i in range(len(C_i)):
                 if i in isingpartial:
-                    full_strings[:, i] = 2*isingpartial[i] - 1
+                    full_strings[:, i] = 2*isingpartial[i] - 1 # "full_strings" not declared, only referenced
                 else:
-                    full_strings[:, i] = qaresults[:, j]
+                    full_strings[:, i] = qaresults[:, j] # "full_strings" not declared, only referenced
                     j += 1
         else:
-            full_strings = qaresults
+            full_strings = qaresults # "full_strings" not declared, only referenced
         
-        s = full_strings
+        s = full_strings # "full_strings" not declared, only referenced
         energies = np.zeros(len(qaresults))
         s[np.where(s > 1)] = 1.0
         s[np.where(s < -1)] = -1.0
@@ -238,7 +244,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         if len(unique_indices) > max_excited_states:
             sorted_indices = np.argsort(energies[unique_indices])[-max_excited_states:]
             unique_indices = unique_indices[sorted_indices]
-        final_answers = full_strings[unique_indices]
+        final_answers = full_strings[unique_indices] # "full_strings" not declared, only referenced
         print('number of selected excited states', len(final_answers))
         
         return final_answers
@@ -251,6 +257,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         final_answer = np.array(final_answer)
         return np.array([final_answer])
 
+# Currently not used, augmented_data used instead
 def create_data(sig, bkg):
     n_classifiers = sig.shape[1]
     predictions = np.concatenate((np.sign(sig), np.sign(bkg)))
@@ -258,15 +265,15 @@ def create_data(sig, bkg):
     y = np.concatenate((np.ones(len(sig)), -np.ones(len(bkg))))
     return predictions, y
 
-def create_augmented_data(sig, bkg):
+def create_augmented_data(sig, bkg): # sig and bkg are only the portions sampled this iteration, out of the total sig and bkg
     offset = AUGMENT_OFFSET
     scale = AUGMENT_SIZE
 
-    n_samples = len(sig) + len(bkg)
-    n_classifiers = sig.shape[1]
-    predictions_raw = np.concatenate((sig, bkg))
-    predictions_raw = np.transpose(predictions_raw)
-    predictions = np.zeros((n_classifiers * scale, n_samples))
+    n_samples = len(sig) + len(bkg) # total number of sampled data points
+    n_classifiers = sig.shape[1] # ???
+    predictions_raw = np.concatenate((sig, bkg)) # combine the two arrays into a larger array
+    predictions_raw = np.transpose(predictions_raw) # ???
+    predictions = np.zeros((n_classifiers * scale, n_samples)) # make an array of zeroes at some length???
     for i in range(n_classifiers):
         for j in range(scale):
             predictions[i*scale + j] = np.sign(predictions_raw[i] + (j-scale//2)*offset) / (n_classifiers * scale)
@@ -274,10 +281,11 @@ def create_augmented_data(sig, bkg):
     print('predictions', predictions)
     return predictions, y
 
+# Does something like combining the training into one place???
 def ensemble(predictions, weights):
     ensemble_predictions = np.zeros(len(predictions[0]))
     
-    if POS_NEG_WEIGHTS:
+    if POS_NEG_WEIGHTS: # "POS_NEG_WEIGHTS" not declared, only referenced
         return np.sign(np.dot(predictions.T, weights))
     else:
         return np.sign(np.dot(predictions.T, weights/2 + 0.5)/n_classifiers)
@@ -396,6 +404,7 @@ for train_size in train_sizes:
             mus = new_mus
             
             np.save('./mus' + str(try_number) + '/mus' + str(train_size) + 'fold' + str(f) + 'iter' + str(i) + '.npy', np.array(mus))
+            # "try_number" not declared, only referenced
         for mu in mus:
             print('final accuracy on train set', accuracy_score(y_train, ensemble(predictions_train, mu)))
             print('final accuracy on test set', accuracy_score(y_test, ensemble(predictions_test, mu)))
