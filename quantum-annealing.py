@@ -105,6 +105,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
     isingpartial = []
 
+    # Likely need to completely re-do
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J, offset) #potentially need to rework in order for func to get params
         fixed_dict = dimod.fix_variables(bqm)
@@ -162,6 +163,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             
                 embedding = find_embedding(J.keys(), A)
                 try:
+                    # Likely need to completely re-do
                     th, tJ = embed_ising(h_gauge, J_gauge, embedding, target)
                     # (h0, j0, jc, new_emb) = embed_problem(h_gauge, J_gauge, embeddings, A, True, True)
                     embedded = True
@@ -293,7 +295,7 @@ print('loaded data')
 n_folds = 10
 num = 0
 
-#Step 3: Loop over all the different training sizes (var created below imports)
+#Step 3: Loop over all the different training sizes (train_size declared/defined below imports)
 for train_size in train_sizes:
     print('training with size', train_size)
     # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
@@ -310,23 +312,29 @@ for train_size in train_sizes:
 
     #Step 5: iterate over the number of folds
     for f in range(n_folds):
-        if num >= end_num: # end num declared and defined below imports 
+        if num >= end_num: # end_num declared/defined below imports 
             break
         print('fold', f)
         # 5.1 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
-        #        determined by the iteration of train_size * data pct
+        #        determined by the iteration of train_size * data pct. "train" arrays store the indeces that were 
+        #        randomly selected to train with that iteration
         train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
         train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
         
-        # 5.2 - update "remaining" arrays for next loop by deleting the already sampled data
+        # 5.2 - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
+        #        so this stores a long-term record of unused indeces (a record across all iterations)
         remaining_sig = np.delete(remaining_sig, train_sig)
         remaining_bkg = np.delete(remaining_bkg, train_bkg)
         
-        # 5.3 - create/update "test" arrays by deleting the already sampled data
+        # 5.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
+        #        however at the next iteration test_sig will be overwritten to only have deleted the indeces used that 
+        #        iteration, so this stores a short-term record of unused indeces (a record only from the current iteration)
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
 
-        # 5.4 - create "train" and "test" vars to divide up data???
+        # 5.4 - creates "train" and "test" vars by sending the pieces of the data arrays ("sig" and "bkg") as 
+        #        determined by the indeces produced from the random samplings ("train" and "test" arrays), 
+        #        so as time goes on the "train" arrays will get smaller, but the "test" arrays will stay the same size
         predictions_train, y_train = create_augmented_data(sig[train_sig], bkg[train_bkg])
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         print('split data')
