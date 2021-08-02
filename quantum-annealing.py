@@ -265,6 +265,7 @@ def create_data(sig, bkg):
     y = np.concatenate((np.ones(len(sig)), -np.ones(len(bkg))))
     return predictions, y
 
+# Creates the data snipets using the small iteration smaples
 def create_augmented_data(sig, bkg): # sig and bkg are only the portions sampled this iteration, out of the total sig and bkg
     offset = AUGMENT_OFFSET
     scale = AUGMENT_SIZE
