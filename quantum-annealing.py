@@ -173,7 +173,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             print("Quantum done")
 
             samples = np.array(unembed_sampleset(embedded, embedding, bqm))
-            # qaresult = np.array(unembed_answer(qaresult["solutions"], new_emb, 'vote', h_gauge, J_gauge))
             qaresult = qaresult * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
         
