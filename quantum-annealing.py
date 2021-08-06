@@ -8,25 +8,16 @@ import time
 import numpy as np
 from scipy.optimize import basinhopping
 from sklearn.metrics import accuracy_score
-#sys.exit(1)
 
 from contextlib import closing
 
-# potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
-# from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
 from dimod import fix_variables, BinaryQuadraticModel as BQM
 import dimod
-# from dwave_sapi2.fix_variables import fix_variables
 from multiprocessing import Pool
 from dwave.cloud import Client 
-# import dwave_sapi2.remote
 from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
-# from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
 from dwave.system.samplers import DWaveSampler
-# from dwave_sapi2.util import get_hardware_adjacency
-# need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
-#from dwave_sapi2.core import solve_ising, await_completion
 
 
 a_time = 5
@@ -96,26 +87,19 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
     isingpartial = []
 
-    # Likely need to completely re-do
     if FIXING_VARIABLES:
-        bqm = BQM.from_ising(h, J, offset) #potentially need to rework in order for func to get params
-        # "offset" not declared, only referenced, bc might 
-        #  be desired in new embed func but wasn't possible in previous func
+        bqm = BQM.from_ising(h, J)
         fixed_dict = dimod.fix_variables(bqm)
-        # end of new Ocean SDK
-        Q, _  = ising_to_qubo(h, J)
-        simple = fix_variables(Q, method='standard')
-        new_Q = simple['new_Q']
-        print('new length', len(new_Q))
-        isingpartial = simple['fixed_variables']
-    if (not FIXING_VARIABLES) or len(new_Q) > 0:
+        new_bqm = fixed_dict['new_Q']
+        print('new length', len(new_bqm))
+        isingpartial = fixed_dict['fixed_variables']
+    if (not FIXING_VARIABLES) or len(new_bqm) > 0:
         cant_connect = True
         while cant_connect:
             try:
                 print('about to call remote')
                 conn = Client(endpoint=url, token=token)
                 sampler = DWaveSampler(endpoint = url, token = token) 
-                # solver = conn.get_solver("DW2X")
                 print('called remote', conn)
                 cant_connect = False
             except IOError:
@@ -123,8 +107,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 time.sleep(10)
                 cant_connect = True
 
-        A = sampler.adjacency 
-        # A = get_hardware_adjacency(solver)
+        A = sampler.adjacency
         
         mapping = []
         offset = 0
@@ -135,10 +118,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             else:
                 mapping.append(i - offset)
         if FIXING_VARIABLES:
-            new_Q_mapped = {}
-            for (first, second), val in new_Q.items():
-                new_Q_mapped[(mapping[first], mapping[second])] = val
-            h, J, _ = qubo_to_ising(new_Q_mapped)
+            new_bqm_mapped = {}
+            for (first, second), val in new_bqm.items():
+                new_bqm_mapped[(mapping[first], mapping[second])] = val
+            # new_ising = BQM.changevartype(bqm, 'SPIN')
         
         # run gauges
         nreads = 200
@@ -156,11 +139,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             
                 embedding = find_embedding(J.keys(), A)
                 try:
-                    # Likely need to completely re-do
-                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, target) 
-                    # "target" not declared, only referenced, bc might 
-                    #  be desired in new embed func but wasn't possible in previous func
-                    # (h0, j0, jc, new_emb) = embed_problem(h_gauge, J_gauge, embeddings, A, True, True)
+                    th, tJ = embed_ising(h_gauge, J_gauge, embedding)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
@@ -172,22 +151,20 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 continue
             
             # adjust chain strength
-            for k, v in j0.items(): # "j0" not returned anymore bc embed func changed
-                j0[k] /= strength_scale # "j0" not returned anymore bc embed func changed
-            for i in range(len(h0)): # "h0" not returned anymore bc embed func changed
-                h0[i] /= strength_scale # "h0" not returned anymore bc embed func changed
+            for k, v in tJ.items(): 
+                tJ[k] /= strength_scale 
+            for i in range(len(th)): 
+                th[i] /= strength_scale 
 
-            emb_j = j0.copy() # "j0" not returned anymore bc embed func changed
-            emb_j.update(jc) # "jc" not returned anymore bc embed func changed
+            emb_j =  tJ.copy()
+            #emb_j.update(jc) -> "jc" not returned anymore bc embed func changed
         
             print("Quantum annealing")
             try_again = True
             while try_again:
                 try:
                     sampler = DWaveSampler()
-                    response = sampler.sample_ising(h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
-                    # "h0" not returned anymore bc embed func changed
-                    # qaresult = solve_ising(solver, h0, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    response = sampler.sample_ising(th, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
                     print('runtime or ioerror, trying again')
@@ -195,7 +172,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum done")
 
-            samples = unembed_sampleset(embedded, embedding, bqm)
+            samples = np.array(unembed_sampleset(embedded, embedding, bqm))
             # qaresult = np.array(unembed_answer(qaresult["solutions"], new_emb, 'vote', h_gauge, J_gauge))
             qaresult = qaresult * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
@@ -270,10 +247,7 @@ def create_augmented_data(sig, bkg): # sig and bkg are only the portions sampled
 def ensemble(predictions, weights):
     ensemble_predictions = np.zeros(len(predictions[0]))
     
-    if POS_NEG_WEIGHTS: # "POS_NEG_WEIGHTS" not declared, only referenced
-        return np.sign(np.dot(predictions.T, weights))
-    else:
-        return np.sign(np.dot(predictions.T, weights/2 + 0.5)/n_classifiers)
+    return np.sign(np.dot(predictions.T, weights))
 
 
 # Step 1: Load Background and Signal data
