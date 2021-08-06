@@ -12,24 +12,21 @@ from sklearn.metrics import accuracy_score
 
 from contextlib import closing
 
-USE_DWAVE = False
-
-if USE_DWAVE:
-    # potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
-    # from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
-    from dimod import fix_variables, BinaryQuadraticModel as BQM
-    import dimod
-    # from dwave_sapi2.fix_variables import fix_variables
-    from multiprocessing import Pool
-    from dwave.cloud import Client 
-    # import dwave_sapi2.remote
-    from minorminer import find_embedding
-    from dwave.embedding import embed_ising, unembed_sampleset
-    # from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
-    from dwave.system.samplers import DWaveSampler
-    # from dwave_sapi2.util import get_hardware_adjacency
-    # need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
-    #from dwave_sapi2.core import solve_ising, await_completion
+# potentially don't even need to convert btwn qubo and ising. new var fixing stored under general class of BQM?
+# from dwave_sapi2.util import qubo_to_ising, ising_to_qubo
+from dimod import fix_variables, BinaryQuadraticModel as BQM
+import dimod
+# from dwave_sapi2.fix_variables import fix_variables
+from multiprocessing import Pool
+from dwave.cloud import Client 
+# import dwave_sapi2.remote
+from minorminer import find_embedding
+from dwave.embedding import embed_ising, unembed_sampleset
+# from dwave_sapi2.embedding import find_embedding,embed_problem,unembed_answer
+from dwave.system.samplers import DWaveSampler
+# from dwave_sapi2.util import get_hardware_adjacency
+# need to find where to put in new ocean tools for solve_ising, requires same(?) params so should be simple
+#from dwave_sapi2.core import solve_ising, await_completion
 
 
 a_time = 5
@@ -50,13 +47,6 @@ AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original
 AUGMENT_OFFSET = 0.0075
 
 FIXING_VARIABLES = True
-
-# Entire function is broken, none of the vars/methods are defined, they are only referenced, potentially don't need???
-def hamiltonian_checker(s, C_i, C_ij, reg):
-    if POS_WEIGHTS:
-        return hamiltonian_orig_posweights(s, C_i, C_ij, reg)
-    elif POS_NEG_WEIGHTS:
-        return hamiltonian_orig_posnegweights(s, C_i, C_ij, reg)
 
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
@@ -210,18 +200,19 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             qaresult = qaresult * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
         
+        full_strings = np.zeros((len(qaresults), len(C_i)))
         if FIXING_VARIABLES:
             j = 0
             for i in range(len(C_i)):
                 if i in isingpartial:
-                    full_strings[:, i] = 2*isingpartial[i] - 1 # "full_strings" not declared, only referenced
+                    full_strings[:, i] = 2*isingpartial[i] - 1  
                 else:
-                    full_strings[:, i] = qaresults[:, j] # "full_strings" not declared, only referenced
+                    full_strings[:, i] = qaresults[:, j]  
                     j += 1
         else:
-            full_strings = qaresults # "full_strings" not declared, only referenced
+            full_strings = qaresults  
         
-        s = full_strings # "full_strings" not declared, only referenced
+        s = full_strings 
         energies = np.zeros(len(qaresults))
         s[np.where(s > 1)] = 1.0
         s[np.where(s < -1)] = -1.0
@@ -244,7 +235,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         if len(unique_indices) > max_excited_states:
             sorted_indices = np.argsort(energies[unique_indices])[-max_excited_states:]
             unique_indices = unique_indices[sorted_indices]
-        final_answers = full_strings[unique_indices] # "full_strings" not declared, only referenced
+        final_answers = full_strings[unique_indices]
         print('number of selected excited states', len(final_answers))
         
         return final_answers
@@ -257,13 +248,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         final_answer = np.array(final_answer)
         return np.array([final_answer])
 
-# Currently not used, augmented_data used instead
-def create_data(sig, bkg):
-    n_classifiers = sig.shape[1]
-    predictions = np.concatenate((np.sign(sig), np.sign(bkg)))
-    predictions = np.transpose(predictions) / float(n_classifiers)
-    y = np.concatenate((np.ones(len(sig)), -np.ones(len(bkg))))
-    return predictions, y
 
 # Creates the data snipets using the small iteration smaples
 def create_augmented_data(sig, bkg): # sig and bkg are only the portions sampled this iteration, out of the total sig and bkg
@@ -290,6 +274,7 @@ def ensemble(predictions, weights):
         return np.sign(np.dot(predictions.T, weights))
     else:
         return np.sign(np.dot(predictions.T, weights/2 + 0.5)/n_classifiers)
+
 
 # Step 1: Load Background and Signal data
 print('loading data')
@@ -404,8 +389,7 @@ for train_size in train_sizes:
             sigma *= zoom_factor
             mus = new_mus
             
-            np.save('./mus' + str(try_number) + '/mus' + str(train_size) + 'fold' + str(f) + 'iter' + str(i) + '.npy', np.array(mus))
-            # "try_number" not declared, only referenced
+            np.save('./mus' + '/mus' + str(train_size) + 'fold' + str(f) + 'iter' + str(i) + '.npy', np.array(mus))
         for mu in mus:
             print('final accuracy on train set', accuracy_score(y_train, ensemble(predictions_train, mu)))
             print('final accuracy on test set', accuracy_score(y_test, ensemble(predictions_test, mu)))
