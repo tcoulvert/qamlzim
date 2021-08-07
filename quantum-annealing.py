@@ -25,6 +25,8 @@ train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 start_num = 9
 end_num = 10
 
+rng = np.random.default_rng(0)
+
 zoom_factor = 0.5
 n_iterations = 1 
 # n_iterations = 8
@@ -89,7 +91,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
-        fixed_dict = dimod.fix_variables(bqm)
+        fixed_dict = fix_variables(bqm)
         new_bqm = fixed_dict['new_Q']
         print('new length', len(new_bqm))
         isingpartial = fixed_dict['fixed_variables']
@@ -248,6 +250,17 @@ def ensemble(predictions, weights):
     
     return np.sign(np.dot(predictions.T, weights))
 
+def rand_delete(remaining_val, num_samples):
+    # Potentially want to return array of sampled indeces, left in for convenience if so
+    # picked_indeces = np.array()
+    picked_values = np.array()
+    for i in range(num_samples):
+        picked_index = rng.rand_int(0, len(remaining_val))
+        # picked_indeces = np.append(picked_index)
+        picked_values = np.append(remaining_val[picked_index])
+        remaining_val = np.delete(remaining_val, picked_index)
+    
+    return picked_values
 
 # Step 1: Load Background and Signal data
 print('loading data')
@@ -275,7 +288,7 @@ for train_size in train_sizes:
 
     # 3.3 - generate folds(what are folds??) using 0 as the seed -> potentially use a different quantum algorithm
     #        to generate actual random numbers
-    fold_generator = np.random.RandomState(0)
+    # fold_generator = np.random.RandomState(0)
 
     #Step 5: iterate over the number of folds
     for f in range(n_folds):
@@ -285,13 +298,18 @@ for train_size in train_sizes:
         # 5.1 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
         #        determined by the iteration of train_size * data pct. "train" arrays store the indeces that were 
         #        randomly selected to train with that iteration
-        train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
-        train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
+
+        # train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
+        # train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
         
         # 5.2 - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
         #        so this stores a long-term record of unused indeces (a record across all iterations)
-        remaining_sig = np.delete(remaining_sig, train_sig)
-        remaining_bkg = np.delete(remaining_bkg, train_bkg)
+
+        # remaining_sig = np.delete(remaining_sig, train_sig)
+        # remaining_bkg = np.delete(remaining_bkg, train_bkg)
+
+        train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
+        train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
         
         # 5.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
         #        however at the next iteration test_sig will be overwritten to only have deleted the indeces used that 
