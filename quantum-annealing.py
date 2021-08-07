@@ -78,7 +78,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             h_i += 2*(sigma[i]*C_ij[i][j]*mu[j]) 
         h[i] = h_i
 
-    vals = np.array(J.values())
+    vals = np.array(list(J.values()))
     # BREAKS HERE
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
@@ -93,7 +93,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
-        new_bqm = fixed_dict['new_Q']
+        new_bqm = fixed_dict['new_bqm']
         print('new length', len(new_bqm))
         isingpartial = fixed_dict['fixed_variables']
     if (not FIXING_VARIABLES) or len(new_bqm) > 0:
