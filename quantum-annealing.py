@@ -88,14 +88,15 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     for k in to_delete:
         del J[k]
 
-    isingpartial = []
 
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
-        new_bqm = fixed_dict['new_bqm']
+        # bqm = bqm.update(BQM(fixed_dict))
+        new_bqm = bqm.copy()
+        for i in fixed_dict.keys(): 
+            ret_store = new_bqm.add_variable(i, fixed_dict[i])
         print('new length', len(new_bqm))
-        isingpartial = fixed_dict['fixed_variables']
     if (not FIXING_VARIABLES) or len(new_bqm) > 0:
         cant_connect = True
         while cant_connect:
@@ -115,7 +116,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         mapping = []
         offset = 0
         for i in range(len(C_i)):
-            if i in isingpartial:
+            if i in fixed_dict:
                 mapping.append(None)
                 offset += 1
             else:
@@ -183,8 +184,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         if FIXING_VARIABLES:
             j = 0
             for i in range(len(C_i)):
-                if i in isingpartial:
-                    full_strings[:, i] = 2*isingpartial[i] - 1  
+                if i in fixed_dict:
+                    full_strings[:, i] = 2*fixed_dict[i] - 1  
                 else:
                     full_strings[:, i] = qaresults[:, j]  
                     j += 1
@@ -222,8 +223,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     else:
         final_answer = []
         for i in range(len(C_i)):
-            if i in isingpartial:
-                final_answer.append(2*isingpartial[i] - 1)
+            if i in fixed_dict:
+                final_answer.append(2*fixed_dict[i] - 1)
         final_answer = np.array(final_answer)
         return np.array([final_answer])
 
