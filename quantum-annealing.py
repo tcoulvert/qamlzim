@@ -79,6 +79,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         h[i] = h_i
 
     vals = np.array(J.values())
+    # BREAKS HERE
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
     for k, v in J.items():
@@ -123,7 +124,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             new_bqm_mapped = {}
             for (first, second), val in new_bqm.items():
                 new_bqm_mapped[(mapping[first], mapping[second])] = val
-            # new_ising = BQM.changevartype(bqm, 'SPIN')
+            new_ising = BQM.changevartype(bqm, 'SPIN')
         
         # run gauges
         nreads = 200
@@ -251,13 +252,13 @@ def ensemble(predictions, weights):
     return np.sign(np.dot(predictions.T, weights))
 
 def rand_delete(remaining_val, num_samples):
-    # Potentially want to return array of sampled indeces, left in for convenience if so
+    # Potentially want to return array of sampled indeces, left in for convenience
     # picked_indeces = np.array()
-    picked_values = np.array()
-    for i in range(num_samples):
-        picked_index = rng.rand_int(0, len(remaining_val))
+    picked_values = np.array(0)
+    for i in range(int(num_samples)):
+        picked_index = rng.integers(0, len(remaining_val))
         # picked_indeces = np.append(picked_index)
-        picked_values = np.append(remaining_val[picked_index])
+        picked_values = np.append(picked_values, remaining_val[picked_index])
         remaining_val = np.delete(remaining_val, picked_index)
     
     return picked_values
