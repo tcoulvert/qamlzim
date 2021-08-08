@@ -18,6 +18,7 @@ from dwave.cloud import Client
 from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
 from dwave.system.samplers import DWaveSampler
+from networkx import Graph
 
 
 a_time = 5
@@ -91,11 +92,12 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
-        new_bqm = bqm.copy()
-        for i in fixed_dict.keys(): 
-            ret_store = new_bqm.add_variable(i, fixed_dict[i])
-        print('new length', len(new_bqm))
-    if (not FIXING_VARIABLES) or len(new_bqm) > 0:
+        fixed_bqm = bqm.copy()
+        for i in fixed_dict.keys():
+            # As of now, don't need to store the vars fixed
+            ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
+        print('new length', len(fixed_bqm))
+    if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
         cant_connect = True
         while cant_connect:
             try:
@@ -109,7 +111,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 time.sleep(10)
                 cant_connect = True
 
-        A = sampler.adjacency
+        # Previous Implimentation below (likely not needed)
+        A_adj = sampler.adjacency
+        A = sampler.to_networkx_graph()
         
         mapping = []
         offset = 0
@@ -119,11 +123,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 offset += 1
             else:
                 mapping.append(i - offset)
-        # if FIXING_VARIABLES:
-        #     new_bqm_mapped = {}
-        #     for (first, second), val in new_bqm.items():
-        #         new_bqm_mapped[(mapping[first], mapping[second])] = val
-        #     new_ising = BQM.changevartype(bqm, 'SPIN')
         
         # run gauges
         nreads = 200
@@ -140,9 +139,12 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                             J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
 
                 # Need to make J and A NetworkX Graphs (type)
-                embedding = find_embedding(J, A)
+                J_NetworkX = Graph()
+                for k, v in J.items():
+                    J_NetworkX.add_edge(k[0], k[1], weight=v)
+                embedding = find_embedding(J_NetworkX, A)
                 try:
-                    th, tJ = embed_ising(h_gauge, J_gauge, embedding)
+                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
