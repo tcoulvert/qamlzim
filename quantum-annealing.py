@@ -79,7 +79,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         h[i] = h_i
 
     vals = np.array(list(J.values()))
-    # BREAKS HERE
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
     for k, v in J.items():
@@ -92,7 +91,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
-        # bqm = bqm.update(BQM(fixed_dict))
         new_bqm = bqm.copy()
         for i in fixed_dict.keys(): 
             ret_store = new_bqm.add_variable(i, fixed_dict[i])
@@ -121,11 +119,11 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 offset += 1
             else:
                 mapping.append(i - offset)
-        if FIXING_VARIABLES:
-            new_bqm_mapped = {}
-            for (first, second), val in new_bqm.items():
-                new_bqm_mapped[(mapping[first], mapping[second])] = val
-            new_ising = BQM.changevartype(bqm, 'SPIN')
+        # if FIXING_VARIABLES:
+        #     new_bqm_mapped = {}
+        #     for (first, second), val in new_bqm.items():
+        #         new_bqm_mapped[(mapping[first], mapping[second])] = val
+        #     new_ising = BQM.changevartype(bqm, 'SPIN')
         
         # run gauges
         nreads = 200
@@ -140,8 +138,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     for j in range(len(h)):
                         if (i, j) in J:
                             J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
-            
-                embedding = find_embedding(J.keys(), A)
+
+                # Need to make J and A NetworkX Graphs (type)
+                embedding = find_embedding(J, A)
                 try:
                     th, tJ = embed_ising(h_gauge, J_gauge, embedding)
                     embedded = True
