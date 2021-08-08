@@ -17,6 +17,7 @@ from multiprocessing import Pool
 from dwave.cloud import Client 
 from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
+from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
 from dwave.system.samplers import DWaveSampler
 from networkx import Graph
 
@@ -94,7 +95,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         fixed_dict = fix_variables(bqm)
         fixed_bqm = bqm.copy()
         for i in fixed_dict.keys():
-            # As of now, don't need to store the vars fixed
+            # As of now, don't need to store the vars fixed (ret_store)
             ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
         print('new length', len(fixed_bqm))
     if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
@@ -111,7 +112,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 time.sleep(10)
                 cant_connect = True
 
-        # Previous Implimentation below (likely not needed)
         A_adj = sampler.adjacency
         A = sampler.to_networkx_graph()
         
@@ -140,12 +140,13 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
                 # Need to make J and A NetworkX Graphs (type)
                 J_NetworkX = Graph()
+                for i in range(len(h_gauge)):
+                    J_NetworkX.add_node(i, weight=h_gauge[i])
                 for k, v in J.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                 embedding = find_embedding(J_NetworkX, A)
                 try:
-                    # th, tJ = embed_ising(h_gauge, J_gauge, embedding, A_adj)
-                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, A)
+                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
