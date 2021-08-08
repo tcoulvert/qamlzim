@@ -158,10 +158,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 continue
             
             # adjust chain strength
-            for k, v in tJ.items(): 
+            for k in list(tJ.keys()):
                 tJ[k] /= strength_scale 
-            for i in range(len(th)): 
-                th[i] /= strength_scale 
+            for k in list(th.keys()):
+                th[k] /= strength_scale 
 
             emb_j =  tJ.copy()
             #emb_j.update(jc) -> "jc" not returned anymore bc embed func changed
@@ -170,7 +170,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             try_again = True
             while try_again:
                 try:
-                    sampler = DWaveSampler()
                     response = sampler.sample_ising(th, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
@@ -179,6 +178,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum done")
 
+            # BREAKS HERE
             samples = np.array(unembed_sampleset(embedded, embedding, bqm))
             qaresult = qaresult * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
