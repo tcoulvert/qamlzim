@@ -170,7 +170,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             try_again = True
             while try_again:
                 try:
-                    response = sampler.sample_ising(th, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    qaresult = sampler.sample_ising(th, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
                     print('runtime or ioerror, trying again')
@@ -178,9 +178,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum done")
 
+            samples = np.array(unembed_sampleset(qaresult, embedding, bqm))
             # BREAKS HERE
-            samples = np.array(unembed_sampleset(embedded, embedding, bqm))
-            qaresult = qaresult * a
+            for i in qaresult:
+                qaresult[i] = qaresult[i] * a
             qaresults[g*nreads:(g+1)*nreads] = qaresult
         
         full_strings = np.zeros((len(qaresults), len(C_i)))
