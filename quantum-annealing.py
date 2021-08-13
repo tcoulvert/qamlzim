@@ -12,7 +12,6 @@ from sklearn.metrics import accuracy_score
 from contextlib import closing
 
 from dimod import fix_variables, BinaryQuadraticModel as BQM
-import dimod
 from multiprocessing import Pool
 from dwave.cloud import Client 
 from minorminer import find_embedding
