@@ -65,7 +65,11 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
     url = "https://cloud.dwavesys.com/sapi/"
     token = os.environ["USC_DWAVE_TOKEN"]
-    annealer = Client.get_solver(name="DWAVE_2000Q6")
+    client = Client.from_config(token=token)
+    # FOR CHIMERA (AKA 2000Q)
+    annealer = client.get_solver(name="DW_2000Q_6")
+    # FOR PEGASUS (AKA ADVANTAGE)
+    # annealer = client.get_solver(name="Advantage_system1.1")
     if not len(token):
         print("error getting token")
     
