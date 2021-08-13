@@ -24,7 +24,7 @@ from networkx import Graph
 
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-start_num = 9
+start_num = 4
 end_num = 10
 
 rng = np.random.default_rng(0)
@@ -165,7 +165,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
             emb_j =  tJ.copy()
             #emb_j.update(jc) -> "jc" not returned anymore bc embed func changed
-        
+
+            print(g)
             print("Quantum annealing")
             try_again = True
             while try_again:
@@ -178,11 +179,12 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum done")
 
-            samples = np.array(unembed_sampleset(qaresult, embedding, bqm))
-            # BREAKS HERE
-            for i in qaresult:
-                qaresult[i] = qaresult[i] * a
-            qaresults[g*nreads:(g+1)*nreads] = qaresult
+            unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
+            # orig_sample = np.array(unembed_qaresult.record.sample)
+            # unembed_qaresult.record.sample[:, :] *= a
+            for i in range(len(unembed_qaresult.record.sample)):
+                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+            qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
         
         full_strings = np.zeros((len(qaresults), len(C_i)))
         if FIXING_VARIABLES:
