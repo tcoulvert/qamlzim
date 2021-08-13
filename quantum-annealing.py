@@ -24,7 +24,7 @@ from networkx import Graph
 
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-start_num = 4
+start_num = 9
 end_num = 10
 
 rng = np.random.default_rng(0)
@@ -281,10 +281,11 @@ print('loaded data')
 
 # Step 2: Initialize n-folds variable and num outside of the for-loop
 n_folds = 10
-num = 0
+# num = 0
 
 #Step 3: Loop over all the different training sizes (train_size declared/defined below imports)
 for train_size in train_sizes:
+    num = 0
     print('training with size', train_size)
     # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
