@@ -29,8 +29,7 @@ end_num = 10
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
-n_iterations = 1 
-# n_iterations = 8
+n_iterations = 8
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
@@ -64,8 +63,9 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 
 
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
-    url = "https://urldefense.proofpoint.com/v2/url?u=https-3A__cloud.dwavesys.com_sapi_&d=DwICaQ&c=-35OiAkTchMrZOngvJPOeA&r=slHzGRYH42mxthT5G1urdMIeKKP7yeQ10eo4sfzeGh4&m=bR93jap-Vc1Ifx35xS2fQfSFeHt8etW6QOss8JXyW2Q&s=pXEbhdRDgTnlmw5DEgjiHWAE1gPlRCJHbYhywU1H2_0&e="
+    url = "https://cloud.dwavesys.com/sapi/"
     token = os.environ["USC_DWAVE_TOKEN"]
+    annealer = Client.get_solver(name="DWAVE_2000Q6")
     if not len(token):
         print("error getting token")
     
@@ -103,7 +103,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             try:
                 print('about to call remote')
                 conn = Client(endpoint=url, token=token)
-                sampler = DWaveSampler(endpoint = url, token = token) 
+                sampler = DWaveSampler(endpoint=url, token=token, solver=annealer)
                 print('called remote', conn)
                 cant_connect = False
             except IOError:
