@@ -64,8 +64,8 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 
 
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
-    url = "https://cloud.dwavesys.com/sapi"
-    token = os.environ["DWAVE_TOKEN"]
+    url = "https://urldefense.proofpoint.com/v2/url?u=https-3A__cloud.dwavesys.com_sapi_&d=DwICaQ&c=-35OiAkTchMrZOngvJPOeA&r=slHzGRYH42mxthT5G1urdMIeKKP7yeQ10eo4sfzeGh4&m=bR93jap-Vc1Ifx35xS2fQfSFeHt8etW6QOss8JXyW2Q&s=pXEbhdRDgTnlmw5DEgjiHWAE1gPlRCJHbYhywU1H2_0&e="
+    token = os.environ["USC_DWAVE_TOKEN"]
     if not len(token):
         print("error getting token")
     
