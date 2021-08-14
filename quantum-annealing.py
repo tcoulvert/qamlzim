@@ -29,7 +29,8 @@ end_num = 10
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
-n_iterations = 8
+n_iterations = 2
+# n_iterations = 8
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
@@ -65,11 +66,6 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
     url = "https://cloud.dwavesys.com/sapi/"
     token = os.environ["USC_DWAVE_TOKEN"]
-    # client = Client.from_config(token=token)
-    # FOR CHIMERA (AKA 2000Q)
-    # annealer = client.get_solver(name="DW_2000Q_6")
-    # FOR PEGASUS (AKA ADVANTAGE)
-    # annealer = client.get_solver(name="Advantage_system1.1")
     if not len(token):
         print("error getting token")
     
@@ -287,11 +283,11 @@ print('loaded data')
 
 # Step 2: Initialize n-folds variable and num outside of the for-loop
 n_folds = 10
-# num = 0
+num = 0
 
 #Step 3: Loop over all the different training sizes (train_size declared/defined below imports)
 for train_size in train_sizes:
-    num = 0
+    # num = 0
     print('training with size', train_size)
     # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
