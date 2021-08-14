@@ -65,9 +65,9 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
     url = "https://cloud.dwavesys.com/sapi/"
     token = os.environ["USC_DWAVE_TOKEN"]
-    client = Client.from_config(token=token)
+    # client = Client.from_config(token=token)
     # FOR CHIMERA (AKA 2000Q)
-    annealer = client.get_solver(name="DW_2000Q_6")
+    # annealer = client.get_solver(name="DW_2000Q_6")
     # FOR PEGASUS (AKA ADVANTAGE)
     # annealer = client.get_solver(name="Advantage_system1.1")
     if not len(token):
@@ -107,7 +107,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             try:
                 print('about to call remote')
                 conn = Client(endpoint=url, token=token)
-                sampler = DWaveSampler(endpoint=url, token=token, solver=annealer)
+                # FOR CHIMERA (AKA 2000Q)
+                # sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
+                # FOR PEGASUS (AKA ADVANTAGE)
+                sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
                 print('called remote', conn)
                 cant_connect = False
             except IOError:
@@ -145,7 +148,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 J_NetworkX = Graph()
                 for i in range(len(h_gauge)):
                     J_NetworkX.add_node(i, weight=h_gauge[i])
-                for k, v in J.items():
+                for k, v in J_gauge.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                 embedding = find_embedding(J_NetworkX, A)
                 try:
