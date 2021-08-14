@@ -29,8 +29,7 @@ end_num = 10
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
-n_iterations = 2
-# n_iterations = 8
+n_iterations = 8
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
@@ -283,11 +282,11 @@ print('loaded data')
 
 # Step 2: Initialize n-folds variable and num outside of the for-loop
 n_folds = 10
-num = 0
+# num = 0
 
 #Step 3: Loop over all the different training sizes (train_size declared/defined below imports)
 for train_size in train_sizes:
-    # num = 0
+    num = 0
     print('training with size', train_size)
     # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
