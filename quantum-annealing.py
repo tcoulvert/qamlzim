@@ -29,7 +29,7 @@ end_num = 10
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
-n_iterations = 8
+n_iterations = 2
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
