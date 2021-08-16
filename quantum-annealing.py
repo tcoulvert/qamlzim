@@ -350,10 +350,7 @@ for train_size in train_sizes:
         print('created C_ij and C_i matrices')
 
         # 5.7 - Create/update ML vars based on matrices
-        mu0 = np.zeros(n_classifiers)
-        sigma0 = np.ones(n_classifiers)
-        mu = np.copy(mu0)
-        sigma = np.copy(sigma0)
+        sigma = np.ones(n_classifiers)
         reg = 0.0
         l0 = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
         strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
