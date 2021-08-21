@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import datetime
+import json
 import os
 import sys
 import time
@@ -22,7 +23,8 @@ from networkx import Graph
 
 
 a_time = 5
-train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+train_sizes = [100, 1000]
 start_num = 9
 end_num = 10
 
@@ -41,12 +43,21 @@ AUGMENT_OFFSET = 0.0075
 
 FIXING_VARIABLES = True
 
+test_results = {
+    'train_sizes': train_sizes,
+    'zoom_factor': zoom_factor,
+    'n_iterations': n_iterations,
+    'AUGMENT_CUTOFF_PERCENTILE': AUGMENT_CUTOFF_PERCENTILE,
+    'AUGMENT_SIZE': AUGMENT_SIZE,
+    'AUGMENT_OFFSET': AUGMENT_OFFSET,
+    'results': []
+}
+
 class DWavePlatform:
     PEGASUS = 1
     CHIMERA = 2
 
 platform = DWavePlatform.PEGASUS
-
 
 url = "https://cloud.dwavesys.com/sapi/"
 token = os.environ["USC_DWAVE_TOKEN"]
@@ -68,6 +79,8 @@ while cant_connect:
         print('Network error, trying again', datetime.datetime.now())
         time.sleep(10)
         cant_connect = True
+A_adj = sampler.adjacency
+A = sampler.to_networkx_graph()
 
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
@@ -91,7 +104,6 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 
 
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
-    
     h = np.zeros(len(C_i))
     J = {}
     for i in range(len(C_i)):
@@ -121,28 +133,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
         print('new length', len(fixed_bqm))
     if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
-        # if not sampler_connected:
-        #     cant_connect = True
-        #     while cant_connect:
-        #         try:
-        #             print('about to call remote')
-        #             # conn = Client(endpoint=url, token=token)
-        #             # FOR CHIMERA (AKA 2000Q)
-        #             # sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
-        #             # FOR PEGASUS (AKA ADVANTAGE)
-        #             sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
-        #             # print('called remote', conn)
-        #             print('called remote')
-        #             cant_connect = False
-        #         except IOError:
-        #             print('Network error, trying again', datetime.datetime.now())
-        #             time.sleep(10)
-        #             cant_connect = True
-        #     sampler_connected = True
-
-        A_adj = sampler.adjacency
-        A = sampler.to_networkx_graph()
-        
         mapping = []
         offset = 0
         for i in range(len(C_i)):
@@ -205,7 +195,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     print('runtime or ioerror, trying again')
                     time.sleep(10)
                     try_again = True
-            print("Quantum done")
+            print("Quantum submitted") # client.py uses threading so technically annealing isn't done yet
 
             unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
             # orig_sample = np.array(unembed_qaresult.record.sample)
@@ -332,19 +322,11 @@ for train_size in train_sizes:
         if num >= end_num: # end_num declared/defined below imports 
             break
         print('fold', f)
-        # 5.1 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
+        # 5.1-5.2 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
         #        determined by the iteration of train_size * data pct. "train" arrays store the indeces that were 
         #        randomly selected to train with that iteration
-
-        # train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
-        # train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
-        
-        # 5.2 - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
+        #         - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
         #        so this stores a long-term record of unused indeces (a record across all iterations)
-
-        # remaining_sig = np.delete(remaining_sig, train_sig)
-        # remaining_bkg = np.delete(remaining_bkg, train_bkg)
-
         train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
         train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
         
@@ -415,7 +397,19 @@ for train_size in train_sizes:
             mus = new_mus
             
             np.save('./mus' + '/mus' + str(train_size) + 'fold' + str(f) + 'iter' + str(i) + '.npy', np.array(mus))
+        accuracy_dict = {}
+        test_point = {
+            "timestamp": datetime.datetime.now(),
+            "train_size": train_size,
+            "train_accuracy": [],
+            "test_accuracy": [],
+        }
         for mu in mus:
-            print('final accuracy on train set', accuracy_score(y_train, ensemble(predictions_train, mu)))
-            print('final accuracy on test set', accuracy_score(y_test, ensemble(predictions_test, mu)))
+            test_point["train_accuracy"].append(accuracy_score(y_train, ensemble(predictions_train, mu)))
+            test_point["test_accuracy"].append(accuracy_score(y_test, ensemble(predictions_test, mu)))
+        test_results['results'].append(test_point)
+        print('final average accuracy on train set', np.mean(np.array(test_point["train_accuracy"])))
+        print('inal average accuracy on test set', np.mean(np.array(test_point["test_accuracy"])))
         num += 1
+filename = 'accuracy_results-%s.json' % datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+json.dump(test_results, open(filename, 'w'), indent=4)
