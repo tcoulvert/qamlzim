@@ -21,6 +21,8 @@ from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
 from dwave.system.samplers import DWaveSampler
 from networkx import Graph
 
+script_path = os.path.dirname(os.path.realpath(__file__))
+timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
 # train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
@@ -396,10 +398,14 @@ for train_size in train_sizes:
             sigma *= zoom_factor
             mus = new_mus
             
-            np.save('./mus' + '/mus' + str(train_size) + 'fold' + str(f) + 'iter' + str(i) + '.npy', np.array(mus))
+            mus_filename = 'mus%05d_fold%d_iter%d-%s.npy' % (train_size, f, i, timestamp)
+            mus_destdir = os.path.join(script_path, 'mus')
+            mus_filepath = (os.path.join(mus_destdir, mus_filename))
+            if not os.path.exists(mus_destdir):
+                os.makedirs(os.path.dirname(mus_destdir))
+            np.save(mus_filename, np.array(mus))
         accuracy_dict = {}
         test_point = {
-            "timestamp": datetime.datetime.now(),
             "train_size": train_size,
             "train_accuracy": [],
             "test_accuracy": [],
@@ -411,5 +417,9 @@ for train_size in train_sizes:
         print('final average accuracy on train set', np.mean(np.array(test_point["train_accuracy"])))
         print('inal average accuracy on test set', np.mean(np.array(test_point["test_accuracy"])))
         num += 1
-filename = 'accuracy_results-%s.json' % datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+filename = 'accuracy_results-%s.json' % timestamp
+destdir = os.path.join(script_path, 'qamlz_runs')
+filepath = os.path.join(destdir, filename)
+if not os.path.exists(destdir):
+    os.makedirs(destdir)
 json.dump(test_results, open(filename, 'w'), indent=4)
