@@ -402,7 +402,7 @@ for train_size in train_sizes:
             mus_destdir = os.path.join(script_path, 'mus')
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
             if not os.path.exists(mus_destdir):
-                os.makedirs(os.path.dirname(mus_destdir))
+                os.makedirs(mus_destdir)
             np.save(mus_filename, np.array(mus))
         accuracy_dict = {}
         test_point = {
