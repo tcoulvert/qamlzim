@@ -403,7 +403,7 @@ for train_size in train_sizes:
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
             if not os.path.exists(mus_destdir):
                 os.makedirs(mus_destdir)
-            np.save(mus_filename, np.array(mus))
+            np.save(mus_filepath, np.array(mus))
         accuracy_dict = {}
         test_point = {
             "train_size": train_size,
@@ -422,4 +422,4 @@ destdir = os.path.join(script_path, 'qamlz_runs')
 filepath = os.path.join(destdir, filename)
 if not os.path.exists(destdir):
     os.makedirs(destdir)
-json.dump(test_results, open(filename, 'w'), indent=4)
+json.dump(test_results, open(filepath, 'w'), indent=4)
