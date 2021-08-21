@@ -41,6 +41,34 @@ AUGMENT_OFFSET = 0.0075
 
 FIXING_VARIABLES = True
 
+class DWavePlatform:
+    PEGASUS = 1
+    CHIMERA = 2
+
+platform = DWavePlatform.PEGASUS
+
+
+url = "https://cloud.dwavesys.com/sapi/"
+token = os.environ["USC_DWAVE_TOKEN"]
+if not len(token):
+    print("error getting token")
+    sys.exit(1)
+
+cant_connect = True
+while cant_connect:
+    try:
+        print('about to create sampler')
+        if platform == DWavePlatform.CHIMERA: # FOR CHIMERA (AKA 2000Q)
+            sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
+        elif platform == DWavePlatform.PEGASUS: # FOR PEGASUS (AKA ADVANTAGE)
+            sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
+        print('created sampler')
+        cant_connect = False
+    except IOError:
+        print('Network error, trying again', datetime.datetime.now())
+        time.sleep(10)
+        cant_connect = True
+
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
     h = 0 - np.dot(s, C_i)
@@ -63,10 +91,6 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
 
 
 def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
-    url = "https://cloud.dwavesys.com/sapi/"
-    token = os.environ["USC_DWAVE_TOKEN"]
-    if not len(token):
-        print("error getting token")
     
     h = np.zeros(len(C_i))
     J = {}
@@ -97,21 +121,24 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
         print('new length', len(fixed_bqm))
     if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
-        cant_connect = True
-        while cant_connect:
-            try:
-                print('about to call remote')
-                conn = Client(endpoint=url, token=token)
-                # FOR CHIMERA (AKA 2000Q)
-                # sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
-                # FOR PEGASUS (AKA ADVANTAGE)
-                sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
-                print('called remote', conn)
-                cant_connect = False
-            except IOError:
-                print('Network error, trying again', datetime.datetime.now())
-                time.sleep(10)
-                cant_connect = True
+        # if not sampler_connected:
+        #     cant_connect = True
+        #     while cant_connect:
+        #         try:
+        #             print('about to call remote')
+        #             # conn = Client(endpoint=url, token=token)
+        #             # FOR CHIMERA (AKA 2000Q)
+        #             # sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
+        #             # FOR PEGASUS (AKA ADVANTAGE)
+        #             sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
+        #             # print('called remote', conn)
+        #             print('called remote')
+        #             cant_connect = False
+        #         except IOError:
+        #             print('Network error, trying again', datetime.datetime.now())
+        #             time.sleep(10)
+        #             cant_connect = True
+        #     sampler_connected = True
 
         A_adj = sampler.adjacency
         A = sampler.to_networkx_graph()
