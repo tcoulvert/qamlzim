@@ -208,6 +208,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     print('Error unembedding answer:', e)
                     time.sleep(10)
             if embedded:
+                make_output_file(failnote='RUNTIME_ERROR:REMOTE_DISCONNECTED__')
                 sys.exit(1)
             for i in range(len(unembed_qaresult.record.sample)):
                 unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
@@ -296,6 +297,15 @@ def rand_delete(remaining_val, num_samples):
         remaining_val = np.delete(remaining_val, picked_index)
     
     return picked_values
+
+def make_output_file(failnote=''):
+    filename = '%saccuracy_results-%s.json' % (failnote, timestamp)
+    destdir = os.path.join(script_path, 'qamlz_runs')
+    filepath = os.path.join(destdir, filename)
+    if not os.path.exists(destdir):
+        os.makedirs(destdir)
+    json.dump(test_results, open(filepath, 'w'), indent=4)
+
 
 # Step 1: Load Background and Signal data
 print('loading data')
@@ -409,9 +419,4 @@ for train_size in train_sizes:
         print('final average accuracy on train set', np.mean(np.array(test_point["train_accuracy"])))
         print('inal average accuracy on test set', np.mean(np.array(test_point["test_accuracy"])))
         num += 1
-filename = 'accuracy_results-%s.json' % timestamp
-destdir = os.path.join(script_path, 'qamlz_runs')
-filepath = os.path.join(destdir, filename)
-if not os.path.exists(destdir):
-    os.makedirs(destdir)
-json.dump(test_results, open(filepath, 'w'), indent=4)
+make_output_file()
