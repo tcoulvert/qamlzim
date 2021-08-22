@@ -25,8 +25,7 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
-# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-train_sizes = [100, 1000, 5000]
+train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 10
 
 rng = np.random.default_rng(0)
@@ -208,7 +207,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     print('Error unembedding answer:', e)
                     time.sleep(10)
             if embedded:
-                make_output_file(failnote='RUNTIME_ERROR:REMOTE_DISCONNECTED__')
+                make_output_file(failnote='FAILED__')
                 sys.exit(1)
             for i in range(len(unembed_qaresult.record.sample)):
                 unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
