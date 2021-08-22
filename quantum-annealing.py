@@ -199,12 +199,14 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum submitted") # client.py uses threading so technically annealing isn't done yet
 
-            while embedded:
+            unembed_timer = time.time() + 60
+            while (embedded and time.time() < unembed_timer):
                 try:
                     unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
                     embedded = False
                 except Exception as e:
                     print('Error unembedding answer:', e)
+                    time.sleep(5)
             for i in range(len(unembed_qaresult.record.sample)):
                 unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
             qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
