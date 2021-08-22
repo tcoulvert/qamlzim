@@ -26,14 +26,13 @@ timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
 # train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-train_sizes = [100, 1000]
-start_num = 9
-end_num = 10
+train_sizes = [100, 1000, 5000]
+n_folds = 10
 
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
-n_iterations = 4
+n_iterations = 8
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
@@ -44,16 +43,6 @@ AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original
 AUGMENT_OFFSET = 0.0075
 
 FIXING_VARIABLES = True
-
-test_results = {
-    'train_sizes': train_sizes,
-    'zoom_factor': zoom_factor,
-    'n_iterations': n_iterations,
-    'AUGMENT_CUTOFF_PERCENTILE': AUGMENT_CUTOFF_PERCENTILE,
-    'AUGMENT_SIZE': AUGMENT_SIZE,
-    'AUGMENT_OFFSET': AUGMENT_OFFSET,
-    'results': []
-}
 
 class DWavePlatform:
     PEGASUS = 1
@@ -73,8 +62,10 @@ while cant_connect:
         print('about to create sampler')
         if platform == DWavePlatform.CHIMERA: # FOR CHIMERA (AKA 2000Q)
             sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
+            dwave_architecture = 'DWAVE 2000Q'
         elif platform == DWavePlatform.PEGASUS: # FOR PEGASUS (AKA ADVANTAGE)
             sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
+            dwave_architecture = 'DWAVE Advantage'
         print('created sampler')
         cant_connect = False
     except IOError:
@@ -83,6 +74,18 @@ while cant_connect:
         cant_connect = True
 A_adj = sampler.adjacency
 A = sampler.to_networkx_graph()
+
+test_results = {
+    'architecture': dwave_architecture,
+    'train_sizes': train_sizes,
+    'n_folds': n_folds,
+    'zoom_factor': zoom_factor,
+    'n_iterations': n_iterations,
+    'AUGMENT_CUTOFF_PERCENTILE': AUGMENT_CUTOFF_PERCENTILE,
+    'AUGMENT_SIZE': AUGMENT_SIZE,
+    'AUGMENT_OFFSET': AUGMENT_OFFSET,
+    'results': []
+}
 
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
@@ -299,32 +302,22 @@ sig_pct = float(len(sig)) / (len(sig) + len(bkg))
 bkg_pct = float(len(bkg)) / (len(sig) + len(bkg))
 print('loaded data')
 
-# Step 2: Initialize n-folds variable and num outside of the for-loop
-n_folds = 10
-# num = 0
-
-#Step 3: Loop over all the different training sizes (train_size declared/defined below imports)
+#Step 2: Loop over all the different training sizes (train_size declared/defined below imports)
 for train_size in train_sizes:
     num = 0
     print('training with size', train_size)
-    # 3.1 - Create arrays with sizes equal to the sizes of bkg and sig
+    # 2.1 - Create arrays with sizes equal to the sizes of bkg and sig
     sig_indices = np.arange(len(sig))
     bkg_indices = np.arange(len(bkg))
     
-    # 3.2 - Create indexing vars with sizes equal to the sizes of the recently created "indices" arrays, and bkg and sig datas
+    # 2.2 - Create indexing vars with sizes equal to the sizes of the recently created "indices" arrays, and bkg and sig datas
     remaining_sig = sig_indices
     remaining_bkg = bkg_indices
 
-    # 3.3 - generate folds(what are folds??) using 0 as the seed -> potentially use a different quantum algorithm
-    #        to generate actual random numbers
-    # fold_generator = np.random.RandomState(0)
-
-    #Step 5: iterate over the number of folds
+    #Step 3: iterate over the number of folds
     for f in range(n_folds):
-        if num >= end_num: # end_num declared/defined below imports 
-            break
         print('fold', f)
-        # 5.1-5.2 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
+        # 3.1-3.2 - returns "train" arrays by randomly sampling some of "reamining" arrays -> the amount of some 
         #        determined by the iteration of train_size * data pct. "train" arrays store the indeces that were 
         #        randomly selected to train with that iteration
         #         - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
@@ -332,73 +325,68 @@ for train_size in train_sizes:
         train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
         train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
         
-        # 5.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
+        # 3.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
         #        however at the next iteration test_sig will be overwritten to only have deleted the indeces used that 
         #        iteration, so this stores a short-term record of unused indeces (a record only from the current iteration)
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
 
-        # 5.4 - creates "train" and "test" vars by sending the pieces of the data arrays ("sig" and "bkg") as 
+        # 3.4 - creates "train" and "test" vars by sending the pieces of the data arrays ("sig" and "bkg") as 
         #        determined by the indeces produced from the random samplings ("train" and "test" arrays), 
         #        so as time goes on the "train" arrays will get smaller, but the "test" arrays will stay the same size
         predictions_train, y_train = create_augmented_data(sig[train_sig], bkg[train_bkg])
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         print('split data')
-        
-        # 5.5 - increment num
-        if num < start_num:
-            num += 1
-            continue
 
-        # 5.6 - create C_ij and C_i matrices
-        n_classifiers = len(predictions_train)
-        C_ij = np.zeros((n_classifiers, n_classifiers))
-        C_i = np.dot(predictions_train, y_train)
-        for i in range(n_classifiers):
-            for j in range(n_classifiers):
-                C_ij[i][j] = np.dot(predictions_train[i], predictions_train[j])
+    # Step 4: create C_ij and C_i matrices as well as loop vars
+    n_classifiers = len(predictions_train)
+    C_ij = np.zeros((n_classifiers, n_classifiers))
+    C_i = np.dot(predictions_train, y_train)
+    for i in range(n_classifiers):
+        for j in range(n_classifiers):
+            C_ij[i][j] = np.dot(predictions_train[i], predictions_train[j])
 
-        print('created C_ij and C_i matrices')
+    print('created C_ij and C_i matrices')
 
-        # 5.7 - Create/update ML vars based on matrices
-        sigma = np.ones(n_classifiers)
-        reg = 0.0
-        l0 = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
-        strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
-        energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
-        gauges = [50, 10] + [1]*(n_iterations - 2)
-        max_states = [16, 4] + [1]*(n_iterations - 2)     # cap the number of excited states accepted per iteration
+    # 4.1 - Create/update ML loop vars based on matrices
+    sigma = np.ones(n_classifiers)
+    reg = 0.0
+    l0 = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
+    strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
+    energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
+    gauges = [50, 10] + [1]*(n_iterations - 2)
+    max_states = [16, 4] + [1]*(n_iterations - 2)     # cap the number of excited states accepted per iteration
 
-        mus = [np.zeros(n_classifiers)]
-        iterations = n_iterations
-        for i in range(iterations):
-            print('iteration', i)
-            l = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
-            new_mus = []
-            for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, l, strengths[i], energy_fractions[i], gauges[i], max_states[i])
-                for s in excited_states:
-                    new_energy = total_hamiltonian(mu + s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
-                    flips = np.ones(len(s))
-                    for a in range(len(s)):
-                        temp_s = np.copy(s)
-                        temp_s[a] = 0
-                        old_energy = total_hamiltonian(mu + temp_s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
-                        energy_diff = new_energy - old_energy
-                        if energy_diff > 0:
-                            flip_prob = flip_probs[i]
-                            flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
-                            flips[a] = flip
-                        else:
-                            flip_prob = flip_others_probs[i]
-                            flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
-                            flips[a] = flip
-                    flipped_s = s * flips
-                    new_mus.append(mu + flipped_s*sigma*zoom_factor)
+    mus = [np.zeros(n_classifiers)]
+    iterations = n_iterations
+    for i in range(iterations):
+        print('iteration', i)
+        l = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
+        new_mus = []
+        for mu in mus:
+            excited_states = anneal(C_i, C_ij, mu, sigma, l, strengths[i], energy_fractions[i], gauges[i], max_states[i])
+            for s in excited_states:
+                new_energy = total_hamiltonian(mu + s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
+                flips = np.ones(len(s))
+                for a in range(len(s)):
+                    temp_s = np.copy(s)
+                    temp_s[a] = 0
+                    old_energy = total_hamiltonian(mu + temp_s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
+                    energy_diff = new_energy - old_energy
+                    if energy_diff > 0:
+                        flip_prob = flip_probs[i]
+                        flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
+                        flips[a] = flip
+                    else:
+                        flip_prob = flip_others_probs[i]
+                        flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
+                        flips[a] = flip
+                flipped_s = s * flips
+                new_mus.append(mu + flipped_s*sigma*zoom_factor)
             sigma *= zoom_factor
             mus = new_mus
             
-            mus_filename = 'mus%05d_fold%d_iter%d-%s.npy' % (train_size, f, i, timestamp)
+            mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
             mus_destdir = os.path.join(script_path, 'mus')
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
             if not os.path.exists(mus_destdir):
