@@ -177,9 +177,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     embedded = False
                     continue
             
-            if not embedded:
-                continue
-            
             # adjust chain strength
             for k in list(tJ.keys()):
                 tJ[k] /= strength_scale 
@@ -202,9 +199,12 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum submitted") # client.py uses threading so technically annealing isn't done yet
 
-            unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
-            # orig_sample = np.array(unembed_qaresult.record.sample)
-            # unembed_qaresult.record.sample[:, :] *= a
+            while embedded:
+                try:
+                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
+                    embedded = False
+                except Exception as e:
+                    print('Error unembedding answer:', e)
             for i in range(len(unembed_qaresult.record.sample)):
                 unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
             qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
