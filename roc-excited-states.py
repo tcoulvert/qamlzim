@@ -12,13 +12,6 @@ POISSON = True
 b_start = 1000000
 b_end = 2000000
 
-def create_data(sig, bkg):
-    n_classifiers = sig.shape[1]
-    predictions = np.concatenate((np.sign(sig), np.sign(bkg)))
-    predictions = np.transpose(predictions) / float(n_classifiers)
-    y = np.concatenate((np.ones(len(sig)), -np.ones(len(bkg))))
-    return predictions, y
-
 def create_augmented_data(sig, bkg):
     offset = AUGMENT_OFFSET
     scale = AUGMENT_SIZE
@@ -71,6 +64,18 @@ def auc(predictions, y_test, test_sig, test_bkg, poisson):
     
     return bkg_rejection, sig_efficiency
 
+def rand_delete(remaining_val, num_samples):
+    # Potentially want to return array of sampled indeces, left in for convenience
+    # picked_indeces = np.array()
+    picked_values = np.array(0)
+    for i in range(int(num_samples)):
+        picked_index = rng.integers(0, len(remaining_val))
+        # picked_indeces = np.append(picked_index)
+        picked_values = np.append(picked_values, remaining_val[picked_index])
+        remaining_val = np.delete(remaining_val, picked_index)
+    
+    return picked_values
+
 sig = np.loadtxt('sig.csv')
 bkg = np.loadtxt('bkg.csv')
 sig_pct = float(len(sig)) / (len(sig) + len(bkg))
@@ -100,15 +105,13 @@ for i in range(len(train_sizes)):
     valid_generator = np.random.RandomState(0)
     for f in range(n_folds):
         print('fold', f)
-        train_sig = fold_generator.choice(remaining_sig, size=int(train_size*sig_pct), replace=False)
-        train_bkg = fold_generator.choice(remaining_bkg, size=int(train_size*bkg_pct), replace=False)
-        
-        remaining_sig = np.delete(remaining_sig, train_sig)
-        remaining_bkg = np.delete(remaining_bkg, train_bkg)
+        train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
+        train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
         
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
         
+        #TEST TO SEE IF IT WORKS
         valid_sig = valid_generator.choice(test_sig, size=int(train_size*sig_pct))
         valid_bkg = valid_generator.choice(test_bkg, size=int(train_size*bkg_pct))
         
