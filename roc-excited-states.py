@@ -17,7 +17,8 @@ POISSON = True
 b_start = 1000000
 b_end = 2000000
 
-rng = np.random.default_rng(0)
+rng_one = np.random.default_rng(0)
+rng_two = np.random.default_rng(0)
 
 def create_augmented_data(sig, bkg):
     offset = AUGMENT_OFFSET
@@ -71,12 +72,15 @@ def auc(predictions, y_test, test_sig, test_bkg, poisson):
     
     return bkg_rejection, sig_efficiency
 
-def rand_delete(remaining_val, num_samples):
+def rand_delete(remaining_val, num_samples, train_data=False, test_data=False):
     # Potentially want to return array of sampled indeces, left in for convenience
     # picked_indeces = np.array()
     picked_values = np.array(0)
     for i in range(int(num_samples)):
-        picked_index = rng.integers(0, len(remaining_val))
+        if train_data:
+            picked_index = rng_one.integers(0, len(remaining_val))
+        elif test_data:
+            picked_index = rng_two.integers(0, len(remaining_val))
         # picked_indeces = np.append(picked_index)
         picked_values = np.append(picked_values, remaining_val[picked_index])
         remaining_val = np.delete(remaining_val, picked_index)
@@ -108,26 +112,29 @@ for i in range(len(train_sizes)):
     
     cts = np.zeros(n_folds*poisson_runs)
     
-    valid_generator = np.random.RandomState(0)
     for f in range(n_folds):
         print('fold', f)
-        train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
-        train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
+        train_sig = rand_delete(remaining_sig, sig_pct*train_size, train_data=True)
+        train_bkg = rand_delete(remaining_bkg, bkg_pct*train_size, train_data=True)
         
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
         
-        #TEST TO SEE IF IT WORKS
-        valid_sig = valid_generator.choice(test_sig, size=int(train_size*sig_pct))
-        valid_bkg = valid_generator.choice(test_bkg, size=int(train_size*bkg_pct))
+        # TEST TO SEE IF IT WORKS
+        # valid_sig = valid_generator.choice(test_sig, size=int(train_size*sig_pct))
+        # valid_bkg = valid_generator.choice(test_bkg, size=int(train_size*bkg_pct))
         
-        test_sig = np.delete(test_sig, valid_sig)
-        test_bkg = np.delete(test_bkg, valid_bkg)
+        # test_sig = np.delete(test_sig, valid_sig)
+        # test_bkg = np.delete(test_bkg, valid_bkg)
+        valid_sig = rand_delete(test_sig, sig_pct*train_size, test_data=True)
+        valid_bkg = rand_delete(test_bkg, bkg_pct*train_size, test_data=True)
 
-        # DOESNT WORK
+        # TEST TO SEE IF IT WORKS
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
-        mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
+        # mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
+        mus_filename = 'mus%05d_iter%d-2021-08-22-20-10-06.npy' % (train_size, i)
+        
         mus_destdir = os.path.join(script_path, 'mus')
         mus_filepath = (os.path.join(mus_destdir, mus_filename))
         excited_weights = np.load(mus_filepath)

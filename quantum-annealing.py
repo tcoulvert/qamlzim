@@ -337,8 +337,8 @@ for train_size in train_sizes:
         #        randomly selected to train with that iteration
         #         - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
         #        so this stores a long-term record of unused indeces (a record across all iterations)
-        train_sig = rand_delete(remaining_sig, num_samples=sig_pct*train_size)
-        train_bkg = rand_delete(remaining_bkg, num_samples=bkg_pct*train_size)
+        train_sig = rand_delete(remaining_sig, sig_pct*train_size)
+        train_bkg = rand_delete(remaining_bkg, bkg_pct*train_size)
         
         # 3.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
         #        however at the next iteration test_sig will be overwritten to only have deleted the indeces used that 
