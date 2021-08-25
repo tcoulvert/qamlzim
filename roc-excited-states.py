@@ -12,6 +12,8 @@ POISSON = True
 b_start = 1000000
 b_end = 2000000
 
+rng = np.random.default_rng(0)
+
 def create_augmented_data(sig, bkg):
     offset = AUGMENT_OFFSET
     scale = AUGMENT_SIZE
@@ -101,7 +103,6 @@ for i in range(len(train_sizes)):
     
     cts = np.zeros(n_folds*poisson_runs)
     
-    fold_generator = np.random.RandomState(0)
     valid_generator = np.random.RandomState(0)
     for f in range(n_folds):
         print('fold', f)
