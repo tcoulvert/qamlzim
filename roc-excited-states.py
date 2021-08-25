@@ -1,8 +1,13 @@
+import datetime
+import os
+
 import numpy as np
 from sklearn.metrics import accuracy_score
 from scipy.integrate import simps
 from scipy.interpolate import interp1d
 
+script_path = os.path.dirname(os.path.realpath(__file__))
+timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0075
@@ -119,9 +124,13 @@ for i in range(len(train_sizes)):
         test_sig = np.delete(test_sig, valid_sig)
         test_bkg = np.delete(test_bkg, valid_bkg)
 
+        # DOESNT WORK
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
-        excited_weights = np.load('./mus/mus' + str(train_size) + 'fold' + str(f) + '.npy')
+        mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
+        mus_destdir = os.path.join(script_path, 'mus')
+        mus_filepath = (os.path.join(mus_destdir, mus_filename))
+        excited_weights = np.load(mus_filepath)
         
         for p in range(poisson_runs):
             if POISSON:
