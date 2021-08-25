@@ -93,7 +93,8 @@ sig_pct = float(len(sig)) / (len(sig) + len(bkg))
 bkg_pct = float(len(bkg)) / (len(sig) + len(bkg))
 print('loaded data')
 
-train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+train_sizes = [100, 1000, 5000]
 n_folds = 10
 
 if POISSON:
