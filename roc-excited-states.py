@@ -9,6 +9,7 @@ from scipy.integrate import simps
 from scipy.interpolate import interp1d
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+# Want to make timestamp not file universal?
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 # train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
@@ -102,6 +103,8 @@ def rand_delete(remaining_val, num_samples, train_data=False, test_data=False):
     return picked_values
 
 def make_output_file(failnote=''):
+    # Want to make timestamp not file universal?
+    # Want to make a "RUN" number to group any run's files together while having separate timestamps?
     filename = '%sauroc_accuracy_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_auroc')
     filepath = os.path.join(destdir, filename)
@@ -138,20 +141,12 @@ for i in range(len(train_sizes)):
         
         test_sig = np.delete(sig_indices, train_sig)
         test_bkg = np.delete(bkg_indices, train_bkg)
-        
-        # TEST TO SEE IF IT WORKS
-        # valid_sig = valid_generator.choice(test_sig, size=int(train_size*sig_pct))
-        # valid_bkg = valid_generator.choice(test_bkg, size=int(train_size*bkg_pct))
-        
-        # test_sig = np.delete(test_sig, valid_sig)
-        # test_bkg = np.delete(test_bkg, valid_bkg)
+
         valid_sig = rand_delete(test_sig, sig_pct*train_size, test_data=True)
         valid_bkg = rand_delete(test_bkg, bkg_pct*train_size, test_data=True)
 
-        # TEST TO SEE IF IT WORKS
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
-        # mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
         mus_filename = 'mus%05d_iter%d-2021-08-22-20-10-06.npy' % (train_size, f)
         print(mus_filename)
         # mus_filenames = glob.glob('mus%05d_iter*-2021-08-22-20-10-06.npy' % train_size)

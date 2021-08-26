@@ -22,6 +22,7 @@ from dwave.system.samplers import DWaveSampler
 from networkx import Graph
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+# Want to make timestamp not file universal?
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
@@ -300,6 +301,7 @@ def rand_delete(remaining_val, num_samples):
     return picked_values
 
 def make_output_file(failnote=''):
+    # Want to make timestamp not file universal?
     filename = '%saccuracy_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_runs')
     filepath = os.path.join(destdir, filename)
@@ -401,6 +403,8 @@ for train_size in train_sizes:
             sigma *= zoom_factor
             mus = new_mus
             
+            # Want to make timestamp not file universal?
+            # Want to make a "RUN" number to group any run's files together while having separate timestamps?
             mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
             mus_destdir = os.path.join(script_path, 'mus')
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
@@ -409,17 +413,19 @@ for train_size in train_sizes:
             np.save(mus_filepath, np.array(mus))
         accuracy_dict = {}
         test_point = {
-            "train_size": train_size,
-            "iteration": i,
-            "errors": [],
-            "train_accuracy": [],
-            "test_accuracy": [],
+            # Want to make timestamp not file universal?
+            'timstamp': timestamp,
+            'train_size': train_size,
+            'iteration': i,
+            'errors': [],
+            'train_accuracy': [],
+            'test_accuracy': [],
         }
         for mu in mus:
-            test_point["train_accuracy"].append(accuracy_score(y_train, ensemble(predictions_train, mu)))
-            test_point["test_accuracy"].append(accuracy_score(y_test, ensemble(predictions_test, mu)))
+            test_point['train_accuracy'].append(accuracy_score(y_train, ensemble(predictions_train, mu)))
+            test_point['test_accuracy'].append(accuracy_score(y_test, ensemble(predictions_test, mu)))
         test_results['results'].append(test_point)
-        print('final average accuracy on train set', np.mean(np.array(test_point["train_accuracy"])))
-        print('inal average accuracy on test set', np.mean(np.array(test_point["test_accuracy"])))
+        print('final average accuracy on train set', np.mean(np.array(test_point['train_accuracy'])))
+        print('inal average accuracy on test set', np.mean(np.array(test_point['test_accuracy'])))
         num += 1
 make_output_file()
