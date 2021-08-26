@@ -1,4 +1,6 @@
 import datetime
+import glob
+import json
 import os
 
 import numpy as np
@@ -8,6 +10,10 @@ from scipy.interpolate import interp1d
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
+# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+train_sizes = [100, 1000, 5000]
+n_folds = 8 # Must be same as n_iterations from run
 
 AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0075
@@ -19,6 +25,14 @@ b_end = 2000000
 
 rng_one = np.random.default_rng(0)
 rng_two = np.random.default_rng(0)
+
+auroc_results = {
+    'train_sizes': train_sizes,
+    'AUGMENT_SIZE': AUGMENT_SIZE,
+    'AUGMENT_OFFSET': AUGMENT_OFFSET,
+    'POISSON': POISSON,
+    'data': []
+}
 
 def create_augmented_data(sig, bkg):
     offset = AUGMENT_OFFSET
@@ -87,15 +101,19 @@ def rand_delete(remaining_val, num_samples, train_data=False, test_data=False):
     
     return picked_values
 
+def make_output_file(failnote=''):
+    filename = '%sauroc_accuracy_results-%s.json' % (failnote, timestamp)
+    destdir = os.path.join(script_path, 'qamlz_auroc')
+    filepath = os.path.join(destdir, filename)
+    if not os.path.exists(destdir):
+        os.makedirs(destdir)
+    json.dump(auroc_results, open(filepath, 'w'), indent=4)
+
 sig = np.loadtxt('sig.csv')
 bkg = np.loadtxt('bkg.csv')
 sig_pct = float(len(sig)) / (len(sig) + len(bkg))
 bkg_pct = float(len(bkg)) / (len(sig) + len(bkg))
 print('loaded data')
-
-# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-train_sizes = [100, 1000, 5000]
-n_folds = 10
 
 if POISSON:
     poisson_runs = 5
@@ -134,7 +152,9 @@ for i in range(len(train_sizes)):
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
         # mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
-        mus_filename = 'mus%05d_iter%d-2021-08-22-20-10-06.npy' % (train_size, i)
+        mus_filename = 'mus%05d_iter%d-2021-08-22-20-10-06.npy' % (train_size, f)
+        print(mus_filename)
+        # mus_filenames = glob.glob('mus%05d_iter*-2021-08-22-20-10-06.npy' % train_size)
         
         mus_destdir = os.path.join(script_path, 'mus')
         mus_filepath = (os.path.join(mus_destdir, mus_filename))
@@ -176,6 +196,9 @@ for i in range(len(train_sizes)):
             
             cts[f*poisson_runs + p] = continuous_auc
     
-        
-    print('auroc mean', np.mean(cts))
-    print('auroc stdev', np.std(cts))
+    mean = np.mean(cts)
+    std = np.std(cts)
+    auroc_results['data'].append({'train_size': train_size, 'mean': mean, 'std_dev': std})
+    print('auroc mean', mean)
+    print('auroc stdev', std)
+make_output_file()
