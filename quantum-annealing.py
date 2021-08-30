@@ -22,7 +22,6 @@ from dwave.system.samplers import DWaveSampler
 from networkx import Graph
 
 script_path = os.path.dirname(os.path.realpath(__file__))
-# Want to make timestamp not file universal?
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
@@ -39,8 +38,10 @@ flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4
 flip_state = -1
 
 AUGMENT_CUTOFF_PERCENTILE = 95
-AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
-AUGMENT_OFFSET = 0.0075
+# AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
+AUGMENT_SIZE = 9
+# AUGMENT_OFFSET = 0.0075
+AUGMENT_OFFSET = 0.005625
 
 FIXING_VARIABLES = True
 
@@ -85,6 +86,9 @@ test_results = {
     'AUGMENT_SIZE': AUGMENT_SIZE,
     'AUGMENT_OFFSET': AUGMENT_OFFSET,
     'results': []
+}
+test_point = {
+    'errors': []
 }
 
 def total_hamiltonian(s, C_i, C_ij):
@@ -309,7 +313,6 @@ def rand_delete(remaining_val, num_samples):
     return picked_values
 
 def make_output_file(failnote=''):
-    # Want to make timestamp not file universal?
     filename = '%saccuracy_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_runs')
     filepath = os.path.join(destdir, filename)
@@ -411,8 +414,6 @@ for train_size in train_sizes:
             sigma *= zoom_factor
             mus = new_mus
             
-            # Want to make timestamp not file universal?
-            # Want to make a "RUN" number to group any run's files together while having separate timestamps?
             mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
             mus_destdir = os.path.join(script_path, 'mus')
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
@@ -421,7 +422,6 @@ for train_size in train_sizes:
             np.save(mus_filepath, np.array(mus))
         accuracy_dict = {}
         test_point = {
-            # Want to make timestamp not file universal?
             'timstamp': timestamp,
             'train_size': train_size,
             'iteration': i,

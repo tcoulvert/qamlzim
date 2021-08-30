@@ -9,15 +9,16 @@ from scipy.integrate import simps
 from scipy.interpolate import interp1d
 
 script_path = os.path.dirname(os.path.realpath(__file__))
-# Want to make timestamp not file universal?
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 # train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-train_sizes = [100, 1000, 5000]
+train_sizes = [100, 1000, 5000, 10000, 15000]
 n_folds = 8 # Must be same as n_iterations from run
 
 AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
+# AUGMENT_SIZE = 9
 AUGMENT_OFFSET = 0.0075
+# AUGMENT_OFFSET = 0.005625
 annnealing_time = 400
 
 POISSON = True
@@ -103,8 +104,6 @@ def rand_delete(remaining_val, num_samples, train_data=False, test_data=False):
     return picked_values
 
 def make_output_file(failnote=''):
-    # Want to make timestamp not file universal?
-    # Want to make a "RUN" number to group any run's files together while having separate timestamps?
     filename = '%sauroc_accuracy_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_auroc')
     filepath = os.path.join(destdir, filename)
@@ -147,9 +146,8 @@ for i in range(len(train_sizes)):
 
         predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
         predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
-        mus_filename = 'mus%05d_iter%d-2021-08-22-20-10-06.npy' % (train_size, f)
+        mus_filename = 'mus%05d_iter%d-2021-08-27-18-56-53.npy' % (train_size, f)
         print(mus_filename)
-        # mus_filenames = glob.glob('mus%05d_iter*-2021-08-22-20-10-06.npy' % train_size)
         
         mus_destdir = os.path.join(script_path, 'mus')
         mus_filepath = (os.path.join(mus_destdir, mus_filename))
