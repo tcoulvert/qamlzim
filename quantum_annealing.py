@@ -39,8 +39,8 @@ n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
 
-AUGMENT_CUTOFF_PERCENTILE = 80
-AUGMENT_SIZE = 9        # must be an odd number (since augmentation includes original value in middle)
+AUGMENT_CUTOFF_PERCENTILE = 95
+AUGMENT_SIZE = 7        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
 
 FIXING_VARIABLES = True
@@ -63,27 +63,30 @@ if not len(token):
     print("error getting token")
     sys.exit(1)
 
-anneal_results = {
-    'git hash': GIT_HASH,
-    'architecture': dwave_architecture,
-    'anneal time': a_time,
-    'train sizes': train_sizes,
-    'number of data folds': n_folds,
-    'zoom factor': zoom_factor,
-    'number of iterations': n_iterations,
-    'augment cutoff percentile': AUGMENT_CUTOFF_PERCENTILE,
-    'number of classifiers': AUGMENT_SIZE,
-    'classifier offset': AUGMENT_OFFSET,
-    'mus arrays': [],
-    'errors': []
-}
+anneal_results = {}
 
 dwave_architecture = None
 sampler = None
 
 def init():
-    global dwave_architecture, sampler
+    global dwave_architecture, sampler, anneal_results
     # log.info('init()')
+    anneal_results = {
+        'git hash': GIT_HASH,
+        'timestamp': timestamp,
+        'architecture': dwave_architecture,
+        'fixing varibles': FIXING_VARIABLES,
+        'anneal time': a_time,
+        'train sizes': train_sizes,
+        'number of data folds': n_folds,
+        'zoom factor': zoom_factor,
+        'number of iterations': n_iterations,
+        'augment cutoff percentile': AUGMENT_CUTOFF_PERCENTILE,
+        'number of classifiers': AUGMENT_SIZE,
+        'classifier offset': AUGMENT_OFFSET,
+        'mus arrays': [],
+        'errors': []
+    }
     cant_connect = True
     while cant_connect:
         try:
@@ -440,19 +443,23 @@ def main():
 def help():
     print('quantum_annealing.py [options]')
     print('options: (ignore "" when typing examples)')
-    print('  --help                   Show this help message')
-    print('  --architecture           Sets which type of Quantum Annealer (QA) to use')
-    print('  --augment_time           Sets the length of the annealing')
-    print('  --train_sizes            Sets the array of train sizes (the size of data trained on)')
-    print('                              eg. "[100,1000,5000]" ONLY use commas to deliminate, no spaces')
-    print('  --n_folds                Sets the number of folds for the data splitting')
-    print('  --zoom_factor            Sets the ratio for quickly it increases in nuance')
-    print('  --n_iterations           Sets the number of annealing iterations for a given train size')
-    print('  --cutoff_percentile      Sets the strength percentile below which connections are dropped')
-    print('                             eg. "90" takes only the strongest 10 "%" of connections')
-    print('  --augment_size <int>     Sets the total number of classifiers (must be odd)')
-    print('  --augment_offset         Sets the distance between the classifiers, generally should')
-    print('                             just be left for the algorithm to calculate')
+    print('  --help                          Show this help message')
+    print('  --timestamp <int>            Sets the time of the total run')
+    print('  --architecture <str>            Sets which type of Quantum Annealer (QA) to use')
+    print('                                    eg. "PEGASUS" or "CHIMERA" ONLY use these two')
+    print('  --fixing_vars <bool>            Sets (T/F) whether or not to fix variables using DWave')
+    print('                                    proprietary software (in general, you should to save time)')
+    print('  --augment_time <int>            Sets the length of the annealing')
+    print('  --train_sizes <int[]>           Sets the array of train sizes (the size of data trained on)')
+    print('                                    eg. "[100,1000,5000]" ONLY use commas to deliminate, no spaces')
+    print('  --n_folds <int>                 Sets the number of folds for the data splitting')
+    print('  --zoom_factor <float>           Sets the ratio for quickly it increases in nuance')
+    print('  --n_iterations <int>            Sets the number of annealing iterations for a given train size')
+    print('  --cutoff_percentile <int>       Sets the strength percentile below which connections are dropped')
+    print('                                    eg. "90" takes only the strongest 10 "%" of connections')
+    print('  --augment_size <int>            Sets the total number of classifiers (must be odd)')
+    print('  --augment_offset <float>        Sets the distance between the classifiers, generally should')
+    print('                                    just be left for the algorithm to calculate')
 
 if __name__ == '__main__':
     i = 1
@@ -460,9 +467,15 @@ if __name__ == '__main__':
         arg = sys.argv[i]
         if arg == '--help':
             help()
+        elif arg == '--timestamp':
+            i += 1
+            timestamp = str(sys.argv[i])
         elif arg == '--architecture':
             i += 1
             platform = DWavePlatform.init(sys.argv[i])
+        elif arg == '--fixing_vars':
+            i += 1
+            FIXING_VARIABLES = bool(sys.argv[i])
         elif arg == '--augment_time':
             i += 1
             a_time = int(sys.argv[i])
@@ -496,5 +509,4 @@ if __name__ == '__main__':
             print('Unrecognized option %s' % (arg))
             sys.exit(1)
         i += 1
-    init()
     main()
