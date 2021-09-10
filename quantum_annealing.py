@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 
@@ -26,45 +27,35 @@ log = logging.getLogger(__name__)
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+rng = np.random.default_rng(0)
+def git_hash():
+    hash = subprocess.check_output('git rev-parse HEAD', shell=True).decode('utf-8')
+    return hash.strip()
+GIT_HASH = git_hash()
 
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-# train_sizes = train_size_arr
-
 n_folds = 10
-# n_folds = n_fold
-
-rng = np.random.default_rng(0)
-
 zoom_factor = 0.5
-# zoom_factor = zoom
-
 n_iterations = 8
-# n_iterations = n_iter
-
-flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
-flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
-flip_state = -1
 
 AUGMENT_CUTOFF_PERCENTILE = 80
-# AUGMENT_CUTOFF_PERCENTILE = cutoff_percentile
-
-# AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
-AUGMENT_SIZE = 9
-# AUGMENT_SIZE = augment_size
-
-# AUGMENT_OFFSET = 0.0075
-AUGMENT_OFFSET = 0.005625
-# AUGMENT_OFFSET = 0.0225/augment_size
+AUGMENT_SIZE = 9        # must be an odd number (since augmentation includes original value in middle)
+AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
 
 FIXING_VARIABLES = True
 
+platform = None
 class DWavePlatform:
     PEGASUS = 1
     CHIMERA = 2
 
+    def init(cmd_arg):
+        if cmd_arg == 'PEGASUS':
+            platform = DWavePlatform.PEGASUS
+        elif cmd_arg == 'CHIMERA':
+            platform = DWavePlatform.CHIMERA
 platform = DWavePlatform.PEGASUS
-# platform = platform_chooser
 
 url = "https://cloud.dwavesys.com/sapi/"
 token = os.environ["USC_DWAVE_TOKEN"]
@@ -72,14 +63,27 @@ if not len(token):
     print("error getting token")
     sys.exit(1)
 
+anneal_results = {
+    'git hash': GIT_HASH,
+    'architecture': dwave_architecture,
+    'anneal time': a_time,
+    'train sizes': train_sizes,
+    'number of data folds': n_folds,
+    'zoom factor': zoom_factor,
+    'number of iterations': n_iterations,
+    'augment cutoff percentile': AUGMENT_CUTOFF_PERCENTILE,
+    'number of classifiers': AUGMENT_SIZE,
+    'classifier offset': AUGMENT_OFFSET,
+    'mus arrays': [],
+    'errors': []
+}
+
 dwave_architecture = None
-A_adj = None
-A = None
 sampler = None
 
 def init():
-    global dwave_architecture, A_adj, A, sampler
-    log.info('init()')
+    global dwave_architecture, sampler
+    # log.info('init()')
     cant_connect = True
     while cant_connect:
         try:
@@ -96,23 +100,7 @@ def init():
             print('Network error, trying again', datetime.datetime.now())
             time.sleep(10)
             cant_connect = True
-    A_adj = sampler.adjacency
-    A = sampler.to_networkx_graph()
-
-test_results = {
-    'architecture': dwave_architecture,
-    'train_sizes': train_sizes,
-    'n_folds': n_folds,
-    'zoom_factor': zoom_factor,
-    'n_iterations': n_iterations,
-    'AUGMENT_CUTOFF_PERCENTILE': AUGMENT_CUTOFF_PERCENTILE,
-    'AUGMENT_SIZE': AUGMENT_SIZE,
-    'AUGMENT_OFFSET': AUGMENT_OFFSET,
-    'results': []
-}
-test_point = {
-    'errors': []
-}
+    return (sampler.adjacency, sampler.to_networkx_graph())
 
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
@@ -135,7 +123,7 @@ def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
     return h
 
 
-def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states):
+def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A):
     h = np.zeros(len(C_i))
     J = {}
     for i in range(len(C_i)):
@@ -226,25 +214,13 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     try_again = True
             print("Quantum submitted") # client.py uses threading so technically annealing isn't done yet
 
-            # unembed_timer = time.time() + 3600
-            # while (embedded and time.time() < unembed_timer):
-            #     try:
-            #         unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
-            #         embedded = False
-            #     except Exception as e:
-            #         print('Error unembedding answer:', e)
-            #         test_point["errors"].append('trialtime-%03d_error%s' % ((time.time() + 120 - unembed_timer), e))
-            #         time.sleep(60)
-            # if embedded:
-            #     make_output_file(failnote='FAILED__')
-            #     sys.exit(1)
             while embedded:
                 try:
                     unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
                     embedded = False
                 except Exception as e:
                     print('Error unembedding answer:', e)
-                    test_point["errors"].append('_error%s' % e)
+                    anneal_results["errors"].append('_error%s' % e)
                     make_output_file(failnote='FAILED__')
                     sys.exit(1)
             for i in range(len(unembed_qaresult.record.sample)):
@@ -336,14 +312,20 @@ def rand_delete(remaining_val, num_samples):
     return picked_values
 
 def make_output_file(failnote=''):
-    filename = '%saccuracy_results-%s.json' % (failnote, timestamp)
+    filename = '%sanneal_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_runs')
     filepath = os.path.join(destdir, filename)
     if not os.path.exists(destdir):
         os.makedirs(destdir)
-    json.dump(test_results, open(filepath, 'w'), indent=4)
+    json.dump(anneal_results, open(filepath, 'w'), indent=4)
 
 def main():
+    flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
+    flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
+    flip_state = -1
+
+    (A_adj, A) = init()
+
     # Step 1: Load Background and Signal data
     print('loading data')
     sig = np.loadtxt('sig.csv')
@@ -415,7 +397,7 @@ def main():
             l = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, l, strengths[i], energy_fractions[i], gauges[i], max_states[i])
+                excited_states = anneal(C_i, C_ij, mu, sigma, l, strengths[i], energy_fractions[i], gauges[i], max_states[i], A_adj, A)
                 for s in excited_states:
                     new_energy = total_hamiltonian(mu + s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(len(s))
@@ -443,50 +425,76 @@ def main():
                 if not os.path.exists(mus_destdir):
                     os.makedirs(mus_destdir)
                 np.save(mus_filepath, np.array(mus))
-            accuracy_dict = {}
-            test_point = {
-                'timstamp': timestamp,
-                'train_size': train_size,
-                'iteration': i,
-                'errors': [],
-                'train_accuracy': [],
-                'test_accuracy': [],
-            }
+                anneal_results['mus arrays'].append('mus%05d_iter%d-%s.npy')
+                anneal_results['errors'].append(0)
+            avg_arr_train =[]
+            avg_arr_test =[]
             for mu in mus:
-                test_point['train_accuracy'].append(accuracy_score(y_train, ensemble(predictions_train, mu)))
-                test_point['test_accuracy'].append(accuracy_score(y_test, ensemble(predictions_test, mu)))
-            test_results['results'].append(test_point)
-            print('final average accuracy on train set', np.mean(np.array(test_point['train_accuracy'])))
-            print('inal average accuracy on test set', np.mean(np.array(test_point['test_accuracy'])))
+                avg_arr_train.append(accuracy_score(y_train, ensemble(predictions_train, mu)))
+                avg_arr_test.append(accuracy_score(y_test, ensemble(predictions_test, mu)))
+            print('final average accuracy on train set: ', np.mean(np.array(avg_arr_train)))
+            print('final average accuracy on test set: ', np.mean(np.array(avg_arr_test)))
             num += 1
     make_output_file()
 
 def help():
     print('quantum_annealing.py [options]')
-    print('options:')
+    print('options: (ignore "" when typing examples)')
     print('  --help                   Show this help message')
+    print('  --architecture           Sets which type of Quantum Annealer (QA) to use')
+    print('  --augment_time           Sets the length of the annealing')
+    print('  --train_sizes            Sets the array of train sizes (the size of data trained on)')
+    print('                              eg. "[100,1000,5000]" ONLY use commas to deliminate, no spaces')
+    print('  --n_folds                Sets the number of folds for the data splitting')
+    print('  --zoom_factor            Sets the ratio for quickly it increases in nuance')
+    print('  --n_iterations           Sets the number of annealing iterations for a given train size')
+    print('  --cutoff_percentile      Sets the strength percentile below which connections are dropped')
+    print('                             eg. "90" takes only the strongest 10 "%" of connections')
     print('  --augment_size <int>     Sets the total number of classifiers (must be odd)')
+    print('  --augment_offset         Sets the distance between the classifiers, generally should')
+    print('                             just be left for the algorithm to calculate')
 
 if __name__ == '__main__':
-    # augment_size = AUGMENT_SIZE
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg == '--help':
             help()
+        elif arg == '--architecture':
+            i += 1
+            platform = DWavePlatform.init(sys.argv[i])
+        elif arg == '--augment_time':
+            i += 1
+            a_time = int(sys.argv[i])
+        elif arg == '--train_sizes':
+            i += 1
+            train_sizes = []
+            clean_str = sys.argv[i][1:-1]
+            num_arr = clean_str.split(',')
+            for num in num_arr:
+                train_sizes.append(num)
+        elif arg == '--n_folds':
+            i += 1
+            n_folds = int(sys.argv[i])
+        elif arg == '--zoom_factor':
+            i += 1
+            zoom_factor = int(sys.argv[i])
+        elif arg == '--n_iterations':
+            i += 1
+            n_iterations = int(sys.argv[i])
+        elif arg == '--cutoff_percentile':
+            i += 1
+            AUGMENT_CUTOFF_PERCENTILE = int(sys.argv[i])
         elif arg == '--augment_size':
             i += 1
-            # augment_size = int(sys.argv[i])
             AUGMENT_SIZE = int(sys.argv[i])
+            AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
+        elif arg == '--augment_offset':
+            i += 1
+            AUGMENT_OFFSET = float(sys.argv[i])
         else:
             print('Unrecognized option %s' % (arg))
             sys.exit(1)
         i += 1
     init()
     main()
-
-# import quantum_annealing
-
-# quantum_annealing.AUGMENT_SIZE = 2
-# quantum_annealing.init()
-# quantum_annealing.main()
