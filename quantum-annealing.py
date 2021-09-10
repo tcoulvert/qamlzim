@@ -26,22 +26,33 @@ timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
+# train_sizes = train_size_arr
+
 n_folds = 10
+# n_folds = n_fold
 
 rng = np.random.default_rng(0)
 
 zoom_factor = 0.5
+# zoom_factor = zoom
+
 n_iterations = 8
+# n_iterations = n_iter
 
 flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
 flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
 flip_state = -1
 
 AUGMENT_CUTOFF_PERCENTILE = 80
+# AUGMENT_CUTOFF_PERCENTILE = cutoff_percentile
+
 # AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_SIZE = 9
+# AUGMENT_SIZE = augment_size
+
 # AUGMENT_OFFSET = 0.0075
 AUGMENT_OFFSET = 0.005625
+# AUGMENT_OFFSET = 0.0225/augment_size
 
 FIXING_VARIABLES = True
 
@@ -50,6 +61,7 @@ class DWavePlatform:
     CHIMERA = 2
 
 platform = DWavePlatform.PEGASUS
+# platform = platform_chooser
 
 url = "https://cloud.dwavesys.com/sapi/"
 token = os.environ["USC_DWAVE_TOKEN"]
