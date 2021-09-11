@@ -2,6 +2,7 @@ import datetime
 import glob
 import json
 import os
+import sys
 
 import numpy as np
 from sklearn.metrics import accuracy_score
@@ -11,14 +12,11 @@ from scipy.interpolate import interp1d
 script_path = os.path.dirname(os.path.realpath(__file__))
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-# train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
-train_sizes = [100, 1000, 5000, 10000, 15000]
+train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 8 # Must be same as n_iterations from run
 
 AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
-# AUGMENT_SIZE = 9
 AUGMENT_OFFSET = 0.0075
-# AUGMENT_OFFSET = 0.005625
 annnealing_time = 400
 
 POISSON = True
@@ -28,6 +26,7 @@ b_end = 2000000
 rng_one = np.random.default_rng(0)
 rng_two = np.random.default_rng(0)
 
+# Change to easilt store data for analysis in annealyze AND jupyter notebook
 auroc_results = {
     'train_sizes': train_sizes,
     'AUGMENT_SIZE': AUGMENT_SIZE,
@@ -35,6 +34,8 @@ auroc_results = {
     'POISSON': POISSON,
     'data': []
 }
+
+# Add in a class to parse the json data from q_a file
 
 def create_augmented_data(sig, bkg):
     offset = AUGMENT_OFFSET
@@ -196,3 +197,22 @@ def main():
         print('auroc mean', mean)
         print('auroc stdev', std)
     make_output_file()
+
+    def help():
+        print('options:')
+        print('  --help     Show this message')
+
+    if __name__ == '__main__':
+        i = 1
+        while i < len(sys.argv):
+            arg = sys.argv[i]
+            if arg == '--help':
+                help()
+            elif arg == '--timestamp':
+                i += 1
+                timestamp = str(sys.argv[i])
+            else:
+                print('Unrecognized option %s' % (arg))
+                sys.exit(1)
+            i += 1
+    main()
