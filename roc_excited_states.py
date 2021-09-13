@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import datetime
 import glob
 import json
@@ -15,8 +16,8 @@ timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 8 # Must be same as n_iterations from run
 
-AUGMENT_SIZE = 7   # must be an odd number (since augmentation includes original value in middle)
-AUGMENT_OFFSET = 0.0075
+AUGMENT_SIZE = 9   # must be an odd number (since augmentation includes original value in middle)
+AUGMENT_OFFSET = 0.005625
 annnealing_time = 400
 
 POISSON = True
@@ -26,7 +27,7 @@ b_end = 2000000
 rng_one = np.random.default_rng(0)
 rng_two = np.random.default_rng(0)
 
-# Change to easilt store data for analysis in annealyze AND jupyter notebook
+# Change to easily store data for analysis in annealyze AND jupyter notebook
 auroc_results = {
     'train_sizes': train_sizes,
     'AUGMENT_SIZE': AUGMENT_SIZE,
@@ -112,6 +113,22 @@ def make_output_file(failnote=''):
         os.makedirs(destdir)
     json.dump(auroc_results, open(filepath, 'w'), indent=4)
 
+def load_json():
+    file_found = False
+    failnote = ''
+    while not file_found:
+        try:
+            filename = '%sanneal_results-%s' % (failnote, timestamp)
+            file_found = True
+        except FileNotFoundError:
+            if failnote == '':
+                failnote = 'FAILED__'
+                continue
+            elif failnote == 'FAILED__':
+                print('File does not exist')
+                sys.exit(1)
+    return json.load(filename)
+
 def main():
     sig = np.loadtxt('sig.csv')
     bkg = np.loadtxt('bkg.csv')
@@ -148,10 +165,10 @@ def main():
 
             predictions_test, y_test = create_augmented_data(sig[test_sig], bkg[test_bkg])
             predictions_valid, y_valid = create_augmented_data(sig[valid_sig], bkg[valid_bkg])
-            mus_filename = 'mus%05d_iter%d-2021-08-27-18-56-53.npy' % (train_size, f)
+            mus_filename = 'mus%05d_iter%d-2021-09-10-09-17-53.npy' % (train_size, f)
             print(mus_filename)
             
-            mus_destdir = os.path.join(script_path, 'mus')
+            mus_destdir = os.path.join(script_path, 'mus_2')
             mus_filepath = (os.path.join(mus_destdir, mus_filename))
             excited_weights = np.load(mus_filepath)
             
@@ -198,21 +215,38 @@ def main():
         print('auroc stdev', std)
     make_output_file()
 
-    def help():
-        print('options:')
-        print('  --help     Show this message')
+def help():
+    print('options:')
+    print('  --help     Show this message')
 
-    if __name__ == '__main__':
-        i = 1
-        while i < len(sys.argv):
-            arg = sys.argv[i]
-            if arg == '--help':
-                help()
-            elif arg == '--timestamp':
-                i += 1
-                timestamp = str(sys.argv[i])
-            else:
-                print('Unrecognized option %s' % (arg))
-                sys.exit(1)
+if __name__ == '__main__':
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '--help':
+            help()
+        elif arg == '--timestamp':
             i += 1
+            timestamp = str(sys.argv[i])
+        elif arg == '--json':
+            i += 1
+            anneal_results = load_json()
+            GIT_HASH = anneal_results['git hash']
+            timestamp = anneal_results['timestamp']
+            dwave_architecture = anneal_results['architecture']
+            FIXING_VARIABLES = anneal_results['git hash']
+            a_time = anneal_results['anneal time']
+            train_sizes = anneal_results['train sizes']
+            n_folds = anneal_results['number of data folds']
+            zoom_factor = anneal_results['zoom factor']
+            n_iterations = anneal_results['number of iterations']
+            AUGMENT_CUTOFF_PERCENTILE = anneal_results['augment cutoff percentile']
+            AUGMENT_SIZE = anneal_results['number of classifiers']
+            AUGMENT_OFFSET = anneal_results['classifier offset']
+            mus_files = anneal_results['mus arrays']
+            error_check_arr = anneal_results['errors']
+        else:
+            print('Unrecognized option %s' % (arg))
+            sys.exit(1)
+        i += 1
     main()

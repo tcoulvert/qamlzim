@@ -25,37 +25,36 @@ from networkx import Graph
 log = logging.getLogger(__name__)
 
 script_path = os.path.dirname(os.path.realpath(__file__))
-timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 rng = np.random.default_rng(0)
 def git_hash():
     hash = subprocess.check_output('git rev-parse HEAD', shell=True).decode('utf-8')
     return hash.strip()
 GIT_HASH = git_hash()
-
+timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+dwave_architecture = None
+FIXING_VARIABLES = True
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
-
 AUGMENT_CUTOFF_PERCENTILE = 95
 AUGMENT_SIZE = 7        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
-
-FIXING_VARIABLES = True
 
 platform = None
 class DWavePlatform:
     PEGASUS = 1
     CHIMERA = 2
-
     def init(cmd_arg):
+        global platform
         if cmd_arg == 'PEGASUS':
             platform = DWavePlatform.PEGASUS
         elif cmd_arg == 'CHIMERA':
             platform = DWavePlatform.CHIMERA
-platform = DWavePlatform.PEGASUS
 
+platform = DWavePlatform.PEGASUS
+sampler = None
 url = "https://cloud.dwavesys.com/sapi/"
 token = os.environ["USC_DWAVE_TOKEN"]
 if not len(token):
@@ -63,9 +62,6 @@ if not len(token):
     sys.exit(1)
 
 anneal_results = {}
-
-dwave_architecture = None
-sampler = None
 
 def init():
     global dwave_architecture, sampler, anneal_results
@@ -314,12 +310,13 @@ def rand_delete(remaining_val, num_samples):
     return picked_values
 
 def make_output_file(failnote=''):
-    filename = '%sanneal_results-%s.json' % (failnote, timestamp)
+    json_filename, filename = '%sanneal_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_runs')
     filepath = os.path.join(destdir, filename)
     if not os.path.exists(destdir):
         os.makedirs(destdir)
     json.dump(anneal_results, open(filepath, 'w'), indent=4)
+    return json_filename
 
 def main():
     flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
@@ -437,7 +434,7 @@ def main():
             print('final average accuracy on train set: ', np.mean(np.array(avg_arr_train)))
             print('final average accuracy on test set: ', np.mean(np.array(avg_arr_test)))
             num += 1
-    make_output_file()
+    return make_output_file()
 
 def help():
     print('quantum_annealing.py [options]')
@@ -508,4 +505,4 @@ if __name__ == '__main__':
             print('Unrecognized option %s' % (arg))
             sys.exit(1)
         i += 1
-    main()
+    json_filename = main()
