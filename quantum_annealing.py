@@ -29,7 +29,7 @@ rng = np.random.default_rng(0)
 def git_hash():
     hash = subprocess.check_output('git rev-parse HEAD', shell=True).decode('utf-8')
     return hash.strip()
-GIT_HASH = git_hash()
+# GIT_HASH = git_hash()
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 dwave_architecture = None
 FIXING_VARIABLES = True
@@ -39,7 +39,8 @@ n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
 AUGMENT_CUTOFF_PERCENTILE = 95
-AUGMENT_SIZE = 7        # must be an odd number (since augmentation includes original value in middle)
+# AUGMENT_CUTOFF_PERCENTILE = 99
+AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
 
 platform = None
@@ -67,7 +68,7 @@ def init():
     global dwave_architecture, sampler, anneal_results
     # log.info('init()')
     anneal_results = {
-        'git hash': GIT_HASH,
+        # 'git hash': GIT_HASH,
         'timestamp': timestamp,
         'architecture': dwave_architecture,
         'fixing varibles': FIXING_VARIABLES,
@@ -310,13 +311,13 @@ def rand_delete(remaining_val, num_samples):
     return picked_values
 
 def make_output_file(failnote=''):
-    json_filename, filename = '%sanneal_results-%s.json' % (failnote, timestamp)
+    filename = '%sanneal_results-%s.json' % (failnote, timestamp)
     destdir = os.path.join(script_path, 'qamlz_runs')
     filepath = os.path.join(destdir, filename)
     if not os.path.exists(destdir):
         os.makedirs(destdir)
     json.dump(anneal_results, open(filepath, 'w'), indent=4)
-    return json_filename
+    return filename
 
 def main():
     flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
