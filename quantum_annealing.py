@@ -20,7 +20,7 @@ from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
 from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
 from dwave.system.samplers import DWaveSampler
-from networkx import Graph
+from networkx import Graph, draw, write_graphml
 
 log = logging.getLogger(__name__)
 
@@ -33,13 +33,14 @@ def git_hash():
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 dwave_architecture = None
 FIXING_VARIABLES = True
+# FIXING_VARIABLES = False
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
+# AUGMENT_CUTOFF_PERCENTILE = 95
 AUGMENT_CUTOFF_PERCENTILE = 95
-# AUGMENT_CUTOFF_PERCENTILE = 99
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
 
@@ -142,20 +143,32 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     for k in to_delete:
         del J[k]
 
-
+    fixed_dict = {}
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
+        # fixed_dict_roof = fix_variables(bqm)
+        # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
         fixed_bqm = bqm.copy()
+        # fixed_bqm_roof = bqm.copy()
+        # fixed_bqm_strong = bqm.copy()
         for i in fixed_dict.keys():
             # As of now, don't need to store the vars fixed (ret_store)
             ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
+        '''for i in fixed_dict_roof.keys():
+            # As of now, don't need to store the vars fixed (ret_store)
+            ret_store = fixed_bqm_roof.add_variable(i, fixed_dict_roof[i])
+        for i in fixed_dict_strong.keys():
+            # As of now, don't need to store the vars fixed (ret_store)
+            ret_store = fixed_bqm_strong.add_variable(i, fixed_dict_strong[i])'''
         print('new length', len(fixed_bqm))
+        # print('new length (roof): ', len(fixed_bqm_roof))
+        # print('new length (strong): ', len(fixed_bqm_strong))
     if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
         mapping = []
         offset = 0
         for i in range(len(C_i)):
-            if i in fixed_dict:
+            if i in fixed_bqm:
                 mapping.append(None)
                 offset += 1
             else:
@@ -175,12 +188,28 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                         if (i, j) in J:
                             J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
 
-                # Need to make J and A NetworkX Graphs (type)
+                # Need to make J and A NetworkX Graphs (var type)
                 J_NetworkX = Graph()
-                for i in range(len(h_gauge)):
-                    J_NetworkX.add_node(i, weight=h_gauge[i])
-                for k, v in J_gauge.items():
+                for k, v in fixed_bqm.linear.items():
+                    J_NetworkX.add_node(k, weight=v)
+                for k, v in fixed_bqm.quadratic.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
+                make_graph_file(J_NetworkX)
+
+                '''J_NetworkX_roof = Graph()
+                J_NetworkX_strong = Graph()
+                for k, v in fixed_bqm_roof.linear.items():
+                    J_NetworkX_roof.add_node(k, weight=v)
+                for k, v in fixed_bqm_roof.quadratic.items():
+                    J_NetworkX_roof.add_edge(k[0], k[1], weight=v)
+                make_graph_file(J_NetworkX_roof)
+                for k, v in fixed_bqm_strong.linear.items():
+                    J_NetworkX_strong.add_node(k, weight=v)
+                for k, v in fixed_bqm_strong.quadratic.items():
+                    J_NetworkX_strong.add_edge(k[0], k[1], weight=v)
+                make_graph_file(J_NetworkX_strong, sampling_mode=False)'''
+
+
                 embedding = find_embedding(J_NetworkX, A)
                 try:
                     th, tJ = embed_ising(h_gauge, J_gauge, embedding, A_adj)
@@ -318,6 +347,20 @@ def make_output_file(failnote=''):
         os.makedirs(destdir)
     json.dump(anneal_results, open(filepath, 'w'), indent=4)
     return filename
+
+def make_graph_file(problem_graph, sampling_mode=True):
+    if FIXING_VARIABLES:
+        if sampling_mode:
+            filename = '%2d-%s-problem_graph-%s.xml' % (AUGMENT_CUTOFF_PERCENTILE, 'ROOF', timestamp)
+        else:
+            filename = '%2d-%s-problem_graph-%s.xml' % (AUGMENT_CUTOFF_PERCENTILE, 'STRONG', timestamp)
+    elif not FIXING_VARIABLES:
+        filename = '%2d-UNFIXED_problem_graph-%s.xml' % (AUGMENT_CUTOFF_PERCENTILE, timestamp)
+    destdir = os.path.join(script_path, 'qamlz_graphs')
+    filepath = os.path.join(destdir, filename)
+    if not os.path.exists(destdir):
+        os.makedirs(destdir)
+    write_graphml(problem_graph, filepath)
 
 def main():
     flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
