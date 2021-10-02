@@ -212,7 +212,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
                 embedding = find_embedding(J_NetworkX, A)
                 try:
-                    th, tJ = embed_ising(h_gauge, J_gauge, embedding, A_adj)
+                    th, tJ = embed_ising(J_NetworkX.nodes, J_NetworkX.edges, embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
