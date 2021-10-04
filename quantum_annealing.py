@@ -190,10 +190,14 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
                 # Need to make J and A NetworkX Graphs (var type)
                 J_NetworkX = Graph()
+                h_gauge_fixed = {}
+                J_gauge_fixed = {}
                 for k, v in fixed_bqm.linear.items():
                     J_NetworkX.add_node(k, weight=v)
+                    h_gauge_fixed[k] = v
                 for k, v in fixed_bqm.quadratic.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
+                    J_gauge_fixed[(k[0], k[1])] = v
                 make_graph_file(J_NetworkX)
 
                 '''J_NetworkX_roof = Graph()
@@ -212,7 +216,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
                 embedding = find_embedding(J_NetworkX, A)
                 try:
-                    th, tJ = embed_ising(J_NetworkX.nodes, J_NetworkX.edges, embedding, A_adj)
+                    th, tJ = embed_ising(h_gauge_fixed, J_gauge_fixed, embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
