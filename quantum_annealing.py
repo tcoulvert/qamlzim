@@ -40,7 +40,7 @@ n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
 # AUGMENT_CUTOFF_PERCENTILE = 95
-AUGMENT_CUTOFF_PERCENTILE = 95
+AUGMENT_CUTOFF_PERCENTILE = 90
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
 
@@ -92,7 +92,8 @@ def init():
                 sampler = DWaveSampler(endpoint=url, token=token, solver="DW_2000Q_6")
                 dwave_architecture = 'DWAVE 2000Q'
             elif platform == DWavePlatform.PEGASUS: # FOR PEGASUS (AKA ADVANTAGE)
-                sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
+                # sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system1.1")
+                sampler = DWaveSampler(endpoint=url, token=token, solver="Advantage_system4.1")
                 dwave_architecture = 'DWAVE Advantage'
             print('created sampler')
             cant_connect = False
@@ -192,6 +193,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 J_NetworkX = Graph()
                 h_gauge_fixed = {}
                 J_gauge_fixed = {}
+                # print(fixed_bqm.variables)
                 for k, v in fixed_bqm.linear.items():
                     J_NetworkX.add_node(k, weight=v)
                     h_gauge_fixed[k] = v
