@@ -2,6 +2,7 @@
 import datetime
 import json
 import logging
+import matplotlib.pyplot as plt
 import os
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import time
 
 import numpy as np
 from scipy.optimize import basinhopping
+from scipy.stats import describe
 from sklearn.metrics import accuracy_score
 
 from contextlib import closing
@@ -43,6 +45,8 @@ n_iterations = 8
 AUGMENT_CUTOFF_PERCENTILE = 90
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
+
+GRAPHING = False
 
 platform = None
 class DWavePlatform:
@@ -103,6 +107,8 @@ def init():
             cant_connect = True
     return (sampler.adjacency, sampler.to_networkx_graph())
 
+# def cutoff_Js ()
+
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
     h = 0 - np.dot(s, C_i)
@@ -135,7 +141,76 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             h_i += 2*(sigma[i]*C_ij[i][j]*mu[j]) 
         h[i] = h_i
 
-    vals = np.array(list(J.values()))
+    if GRAPHING:
+        h_array = h
+        print(describe(h))
+        plt.figure(0, figsize=(9, 4))
+        plt.hist(h, bins=200, zorder=4, range=(np.min(h), np.max(h)))
+        plt.plot([-0.00095, 0.00095], [39, 39], color='r', marker='|')
+        plt.plot([-0.15115, -0.14885], [39, 39], color='k', marker='|')
+        plt.plot([0.0491, 0.0509], [39, 39], color='g', marker='|')
+        plt.title('Histogram of h Values')
+        plt.grid(color='#808080', zorder=3)
+        plt.ylim(0, 40)
+        plt.ylabel('Count')
+        plt.xlabel('h')
+        plt.savefig('h_Hist.png', dpi=300)
+
+        J_np_array1 = np.array(list(J.values()))
+        print(describe(J_np_array1))
+        plt.figure(1, figsize=(9, 4))
+        plt.hist(J_np_array1, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
+        plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
+        plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
+        plt.title('Histogram of J Values: Before Cutoff')
+        plt.grid(color='#808080', zorder=3)
+        plt.ylim(0, 2700)
+        plt.ylabel('Count')
+        plt.xlabel('J')
+        plt.savefig('J_Hist_Before.png', dpi=300)
+
+        J_sums = np.empty(len(h))
+        for i in np.arange(len(h)):
+            for j in np.arange(len(h)):
+                if j > i and (i, j) in J:
+                    J_sums[i] = np.abs(J[(i, j)])
+                    J_sums[j] = np.abs(J[(i, j)])
+                else:
+                    if j < i:
+                        j = i
+                    continue
+        strength_array = h_array / J_sums
+        plt.figure(4, figsize=(9, 4))
+        plt.hist(strength_array, bins=200, zorder=4, range=(np.min(strength_array), np.max(strength_array)), label='Full Distribution of Strengths: %d' % (np.size(strength_array)))
+        plt.title('Histogram of (All) Coupling Strengths')
+        plt.grid(color='#808080', zorder=3)
+        plt.ylabel('Count')
+        plt.xlabel('Strengths {h/Σ(J)}')
+        plt.legend()
+        plt.savefig('Strengths_Hist.png', dpi=300)
+
+        strength_array_majority = strength_array[strength_array >= -2500]
+        plt.figure(5, figsize=(9, 4))
+        plt.hist(strength_array_majority, bins=200, zorder=4, range=(np.min(strength_array_majority), np.max(strength_array_majority)), label='Majority of Strengths: %d' % (np.size(strength_array_majority)))
+        plt.title('Histogram of (Most) Coupling Strengths')
+        plt.grid(color='#808080', zorder=3)
+        plt.ylabel('Count')
+        plt.xlabel('Strengths {h/Σ(J)}')
+        plt.legend()
+        plt.savefig('Strengths_Majority_Hist.png', dpi=300)
+
+        strength_array_strongest = strength_array[(strength_array >= -10) & (strength_array <= 10)]
+        plt.figure(6, figsize=(9, 4))
+        plt.hist(strength_array_strongest, bins=200, zorder=4, range=(np.min(strength_array_strongest), np.max(strength_array_strongest)), label='Within 1 OOM Strengths: %d' % (np.size(strength_array_strongest)))
+        plt.title('Histogram of (Strongest) Coupling Strengths')
+        plt.grid(color='#808080', zorder=3)
+        plt.ylabel('Count')
+        plt.xlabel('Strengths {h/Σ(J)}')
+        plt.legend()
+        plt.savefig('Strengths_Strongest_Hist.png', dpi=300)
+
+
+    vals = J_np_array1
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
     for k, v in J.items():
@@ -148,6 +223,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
+        print(np.size(h))
+        print(len(fixed_dict))
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
         fixed_bqm = bqm.copy()
@@ -155,7 +232,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         # fixed_bqm_strong = bqm.copy()
         for i in fixed_dict.keys():
             # As of now, don't need to store the vars fixed (ret_store)
-            ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
+            # ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
+            fixed_bqm.fix_variable(i, fixed_dict[i])
         '''for i in fixed_dict_roof.keys():
             # As of now, don't need to store the vars fixed (ret_store)
             ret_store = fixed_bqm_roof.add_variable(i, fixed_dict_roof[i])
@@ -165,6 +243,34 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         print('new length', len(fixed_bqm))
         # print('new length (roof): ', len(fixed_bqm_roof))
         # print('new length (strong): ', len(fixed_bqm_strong))
+
+        if GRAPHING:
+            J_np_array2 = np.array(list(J.values()))
+            print(describe(J_np_array2))
+            plt.figure(2, figsize=(9, 4))
+            plt.hist(J_np_array2, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
+            plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
+            plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
+            plt.title('Histogram of J Values: After Cutoff')
+            plt.grid(color='#808080', zorder=3)
+            plt.ylim(0, 2700)
+            plt.ylabel('Count')
+            plt.xlabel('J')
+            plt.savefig('J_Hist_After.png', dpi=300)
+
+            J_np_array_rmweak = np.delete(J_np_array1, np.argwhere((J_np_array1 >= -0.00015) & (J_np_array1 <= 0.00015)))
+            print(describe(J_np_array_rmweak))
+            plt.figure(3, figsize=(9, 4))
+            plt.hist(J_np_array_rmweak, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
+            plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
+            plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
+            plt.title('Histogram of J Values: Removed Weak Chains')
+            plt.grid(color='#808080', zorder=3)
+            plt.ylim(0, 2700)
+            plt.ylabel('Count')
+            plt.xlabel('J')
+            plt.savefig('J_Hist_Removal.png', dpi=300)
+
     if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
         mapping = []
         offset = 0
