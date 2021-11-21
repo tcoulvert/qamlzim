@@ -208,7 +208,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         plt.savefig('Strengths_Strongest_Hist.png', dpi=300)
 
 
-    vals = J_np_array1
+    vals = np.array(list(J.values()))
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
     for k, v in J.items():
