@@ -35,13 +35,11 @@ def git_hash():
 timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 dwave_architecture = None
 FIXING_VARIABLES = True
-# FIXING_VARIABLES = False
 a_time = 5
 train_sizes = [100, 1000, 5000, 10000, 15000, 20000]
 n_folds = 10
 zoom_factor = 0.5
 n_iterations = 8
-# AUGMENT_CUTOFF_PERCENTILE = 95
 AUGMENT_CUTOFF_PERCENTILE = 90
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
@@ -227,22 +225,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         print(len(fixed_dict))
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
-        fixed_bqm = bqm.copy()
-        # fixed_bqm_roof = bqm.copy()
-        # fixed_bqm_strong = bqm.copy()
         for i in fixed_dict.keys():
-            # As of now, don't need to store the vars fixed (ret_store)
-            # ret_store = fixed_bqm.add_variable(i, fixed_dict[i])
-            fixed_bqm.fix_variable(i, fixed_dict[i])
-        '''for i in fixed_dict_roof.keys():
-            # As of now, don't need to store the vars fixed (ret_store)
-            ret_store = fixed_bqm_roof.add_variable(i, fixed_dict_roof[i])
-        for i in fixed_dict_strong.keys():
-            # As of now, don't need to store the vars fixed (ret_store)
-            ret_store = fixed_bqm_strong.add_variable(i, fixed_dict_strong[i])'''
-        print('new length', len(fixed_bqm))
-        # print('new length (roof): ', len(fixed_bqm_roof))
-        # print('new length (strong): ', len(fixed_bqm_strong))
+            bqm.fix_variable(i, fixed_dict[i])
+        print('new length', len(bqm))
 
         if GRAPHING:
             J_np_array2 = np.array(list(J.values()))
@@ -271,11 +256,11 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             plt.xlabel('J')
             plt.savefig('J_Hist_Removal.png', dpi=300)
 
-    if (not FIXING_VARIABLES) or len(fixed_bqm) > 0:
+    if (not FIXING_VARIABLES) or len(bqm) > 0:
         mapping = []
         offset = 0
         for i in range(len(C_i)):
-            if i in fixed_bqm:
+            if i in bqm:
                 mapping.append(None)
                 offset += 1
             else:
@@ -300,10 +285,10 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 h_gauge_fixed = {}
                 J_gauge_fixed = {}
                 # print(fixed_bqm.variables)
-                for k, v in fixed_bqm.linear.items():
+                for k, v in bqm.linear.items():
                     J_NetworkX.add_node(k, weight=v)
                     h_gauge_fixed[k] = v
-                for k, v in fixed_bqm.quadratic.items():
+                for k, v in bqm.quadratic.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                     J_gauge_fixed[(k[0], k[1])] = v
                 make_graph_file(J_NetworkX)
