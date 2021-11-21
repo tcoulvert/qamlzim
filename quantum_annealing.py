@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+from networkx.classes.function import get_node_attributes, get_edge_attributes
 
 import numpy as np
 from scipy.optimize import basinhopping
@@ -257,14 +258,14 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             plt.savefig('J_Hist_Removal.png', dpi=300)
 
     if (not FIXING_VARIABLES) or len(bqm) > 0:
-        mapping = []
+        '''mapping = []
         offset = 0
         for i in range(len(C_i)):
             if i in bqm:
                 mapping.append(None)
                 offset += 1
             else:
-                mapping.append(i - offset)
+                mapping.append(i - offset)'''
         
         # run gauges
         nreads = 200
@@ -281,7 +282,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                             J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
 
                 # Need to make J and A NetworkX Graphs (var type)
-                J_NetworkX = Graph()
+                '''J_NetworkX = Graph()
                 h_gauge_fixed = {}
                 J_gauge_fixed = {}
                 # print(fixed_bqm.variables)
@@ -291,25 +292,11 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 for k, v in bqm.quadratic.items():
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                     J_gauge_fixed[(k[0], k[1])] = v
-                make_graph_file(J_NetworkX)
-
-                '''J_NetworkX_roof = Graph()
-                J_NetworkX_strong = Graph()
-                for k, v in fixed_bqm_roof.linear.items():
-                    J_NetworkX_roof.add_node(k, weight=v)
-                for k, v in fixed_bqm_roof.quadratic.items():
-                    J_NetworkX_roof.add_edge(k[0], k[1], weight=v)
-                make_graph_file(J_NetworkX_roof)
-                for k, v in fixed_bqm_strong.linear.items():
-                    J_NetworkX_strong.add_node(k, weight=v)
-                for k, v in fixed_bqm_strong.quadratic.items():
-                    J_NetworkX_strong.add_edge(k[0], k[1], weight=v)
-                make_graph_file(J_NetworkX_strong, sampling_mode=False)'''
-
-
+                # make_graph_file(J_NetworkX)'''
+                J_NetworkX = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
-                    th, tJ = embed_ising(h_gauge_fixed, J_gauge_fixed, embedding, A_adj)
+                    th, tJ = embed_ising(get_node_attributes(J_NetworkX), get_edge_attributes(J_NetworkX), embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
