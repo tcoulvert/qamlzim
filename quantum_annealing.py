@@ -16,7 +16,7 @@ from sklearn.metrics import accuracy_score
 
 from contextlib import closing
 
-from dimod import fix_variables, BinaryQuadraticModel as BQM
+from dimod import fix_variables, BinaryQuadraticModel as BQM, roof_duality, to_networkx_graph
 from multiprocessing import Pool
 from dwave.cloud import Client 
 from minorminer import find_embedding
@@ -104,7 +104,7 @@ def init():
             print('Network error, trying again', datetime.datetime.now())
             time.sleep(10)
             cant_connect = True
-    return (sampler.adjacency, sampler.to_networkx_graph())
+    return (sampler.adjacency, to_networkx_graph(sampler))
 
 # def cutoff_Js ()
 
@@ -221,7 +221,9 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     fixed_dict = {}
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
-        fixed_dict = fix_variables(bqm)
+        # fixed_dict = fix_variables(bqm)
+        fixed_dict = roof_duality.fix_variables(bqm)
+        bqm_full = bqm.copy()
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
         for i in fixed_dict.keys():
@@ -267,19 +269,19 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         
         # run gauges
         nreads = 200
-        # qaresults = np.zeros((ngauges*nreads, len(h)))
-        qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
+        qaresults = np.zeros((ngauges*nreads, len(h)))
+        # qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
         for g in range(ngauges):
             embedded = False
             for attempt in range(5):
                 a = np.sign(np.random.rand(len(h)) - 0.5)
-                a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
-                h_gauge = h*a
+                # a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
+                '''h_gauge = h*a
                 J_gauge = {}
                 for i in range(len(h)):
                     for j in range(len(h)):
                         if (i, j) in J:
-                            J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]
+                            J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]'''
 
                 # Need to make J and A NetworkX Graphs (var type)
                 '''J_NetworkX = Graph()
@@ -292,7 +294,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                     J_gauge_fixed[(k[0], k[1])] = v
                 # make_graph_file(J_NetworkX)'''
-                J_NetworkX = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
+                J_NetworkX = to_networkx_graph(bqm, node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
                     th, tJ = embed_ising(get_node_attributes(J_NetworkX, 'h_bias'), get_edge_attributes(J_NetworkX, 'J_bias'), embedding, A_adj)
@@ -327,7 +329,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
             while embedded:
                 try:
-                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
+                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm_full)
                     embedded = False
                 except Exception as e:
                     print('Error unembedding answer:', e)
@@ -335,8 +337,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     make_output_file(failnote='FAILED__')
                     sys.exit(1)
             for i in range(len(unembed_qaresult.record.sample)):
-                # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
-                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
+                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+                # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
             qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
         
         full_strings = np.zeros((len(qaresults), len(C_i)))
