@@ -222,13 +222,11 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         fixed_dict = fix_variables(bqm)
-        print(np.size(h))
-        print(len(fixed_dict))
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
-        print('new length', len(bqm))
+        print('new length: %d' % (bqm.num_variables))
 
         if GRAPHING:
             J_np_array2 = np.array(list(J.values()))
@@ -257,7 +255,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             plt.xlabel('J')
             plt.savefig('J_Hist_Removal.png', dpi=300)
 
-    if (not FIXING_VARIABLES) or len(bqm) > 0:
+    if (not FIXING_VARIABLES) or bqm.num_variables > 0:
         '''mapping = []
         offset = 0
         for i in range(len(C_i)):
@@ -285,7 +283,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 '''J_NetworkX = Graph()
                 h_gauge_fixed = {}
                 J_gauge_fixed = {}
-                # print(fixed_bqm.variables)
                 for k, v in bqm.linear.items():
                     J_NetworkX.add_node(k, weight=v)
                     h_gauge_fixed[k] = v
@@ -293,6 +290,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                     J_gauge_fixed[(k[0], k[1])] = v
                 # make_graph_file(J_NetworkX)'''
+                a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
                 J_NetworkX = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
@@ -336,7 +334,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     make_output_file(failnote='FAILED__')
                     sys.exit(1)
             for i in range(len(unembed_qaresult.record.sample)):
-                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+                # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
             qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
         
         full_strings = np.zeros((len(qaresults), len(C_i)))
