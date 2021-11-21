@@ -267,11 +267,13 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         
         # run gauges
         nreads = 200
-        qaresults = np.zeros((ngauges*nreads, len(h)))
+        # qaresults = np.zeros((ngauges*nreads, len(h)))
+        qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
         for g in range(ngauges):
             embedded = False
             for attempt in range(5):
                 a = np.sign(np.random.rand(len(h)) - 0.5)
+                a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
                 h_gauge = h*a
                 J_gauge = {}
                 for i in range(len(h)):
@@ -290,7 +292,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     J_NetworkX.add_edge(k[0], k[1], weight=v)
                     J_gauge_fixed[(k[0], k[1])] = v
                 # make_graph_file(J_NetworkX)'''
-                a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
                 J_NetworkX = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
