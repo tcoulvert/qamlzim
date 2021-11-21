@@ -296,7 +296,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                 J_NetworkX = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
-                    th, tJ = embed_ising(get_node_attributes(J_NetworkX), get_edge_attributes(J_NetworkX), embedding, A_adj)
+                    th, tJ = embed_ising(get_node_attributes(J_NetworkX, 'h_bias'), get_edge_attributes(J_NetworkX, 'J_bias'), embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
