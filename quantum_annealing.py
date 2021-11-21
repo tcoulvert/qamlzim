@@ -16,12 +16,13 @@ from sklearn.metrics import accuracy_score
 
 from contextlib import closing
 
-from dimod import fix_variables, BinaryQuadraticModel as BQM, roof_duality, to_networkx_graph
+from dimod import fix_variables, BinaryQuadraticModel as BQM, to_networkx_graph
 from multiprocessing import Pool
 from dwave.cloud import Client 
 from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
 from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
+from dwave.preprocessing import roof_duality
 from dwave.system.samplers import DWaveSampler
 from networkx import Graph, draw, write_graphml
 
@@ -104,7 +105,7 @@ def init():
             print('Network error, trying again', datetime.datetime.now())
             time.sleep(10)
             cant_connect = True
-    return (sampler.adjacency, to_networkx_graph(sampler))
+    return (sampler.adjacency, sampler.to_networkx_graph())
 
 # def cutoff_Js ()
 
@@ -222,7 +223,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
         # fixed_dict = fix_variables(bqm)
-        fixed_dict = roof_duality.fix_variables(bqm)
+        (lowerE, fixed_dict) = roof_duality(bqm)
+        print('The lower Energy-bound for our Problem is %f' % (lowerE))
         bqm_full = bqm.copy()
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
