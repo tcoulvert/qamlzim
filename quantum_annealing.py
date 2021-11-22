@@ -315,7 +315,8 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
             while embedded:
                 try:
-                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm_full)
+                    # unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm_full)
+                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
                     embedded = False
                 except Exception as e:
                     print('Error unembedding answer:', e)
