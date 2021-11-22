@@ -224,7 +224,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         bqm = BQM.from_ising(h, J)
         # fixed_dict = fix_variables(bqm)
         (lowerE, fixed_dict) = roof_duality(bqm)
-        print('The lower Energy-bound for our Problem is %f' % (lowerE))
+        print('Lower Energy-Bound %f' % (lowerE))
         bqm_full = bqm.copy()
         # fixed_dict_roof = fix_variables(bqm)
         # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
@@ -271,31 +271,15 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         
         # run gauges
         nreads = 200
-        qaresults = np.zeros((ngauges*nreads, len(h)))
-        # qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
+        # qaresults = np.zeros((ngauges*nreads, len(h)))
+        qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
         for g in range(ngauges):
             embedded = False
             for attempt in range(5):
-                a = np.sign(np.random.rand(len(h)) - 0.5)
-                # a_prime = np.sign(np.random.rand(bqm.num_variables) - 0.5)
-                '''h_gauge = h*a
-                J_gauge = {}
-                for i in range(len(h)):
-                    for j in range(len(h)):
-                        if (i, j) in J:
-                            J_gauge[(i, j)] = J[(i, j)]*a[i]*a[j]'''
+                # a = np.sign(np.random.rand(len(h)) - 0.5)
+                a = np.sign(np.random.rand(bqm.num_variables) - 0.5)
 
                 # Need to make J and A NetworkX Graphs (var type)
-                '''J_NetworkX = Graph()
-                h_gauge_fixed = {}
-                J_gauge_fixed = {}
-                for k, v in bqm.linear.items():
-                    J_NetworkX.add_node(k, weight=v)
-                    h_gauge_fixed[k] = v
-                for k, v in bqm.quadratic.items():
-                    J_NetworkX.add_edge(k[0], k[1], weight=v)
-                    J_gauge_fixed[(k[0], k[1])] = v
-                # make_graph_file(J_NetworkX)'''
                 J_NetworkX = to_networkx_graph(bqm, node_attribute_name='h_bias', edge_attribute_name='J_bias')
                 embedding = find_embedding(J_NetworkX, A)
                 try:
