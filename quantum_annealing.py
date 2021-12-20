@@ -16,6 +16,8 @@ from sklearn.metrics import accuracy_score
 
 from contextlib import closing
 
+# from BQM import Linear, Quadratic
+from copy import deepcopy
 from dimod import fix_variables, BinaryQuadraticModel as BQM, to_networkx_graph
 from multiprocessing import Pool
 from dwave.cloud import Client 
@@ -24,7 +26,7 @@ from dwave.embedding import embed_ising, unembed_sampleset
 from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
 from dwave.preprocessing import roof_duality
 from dwave.system.samplers import DWaveSampler
-from networkx import Graph, draw, write_graphml
+from networkx import Graph, draw, write_graphml, convert
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +47,10 @@ n_iterations = 8
 AUGMENT_CUTOFF_PERCENTILE = 90
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
+C = 4
+QAC = False
+if C > 1:
+    QAC = True
 
 GRAPHING = False
 
@@ -211,6 +217,7 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
 
     vals = np.array(list(J.values()))
+    max_J = np.max(vals)
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
     to_delete = []
     for k, v in J.items():
@@ -222,15 +229,33 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
     fixed_dict = {}
     if FIXING_VARIABLES:
         bqm = BQM.from_ising(h, J)
-        # fixed_dict = fix_variables(bqm)
-        (lowerE, fixed_dict) = roof_duality(bqm)
+        orig_lin_length = bqm.num_variables
+        orig_quad_length = bqm.num_interactions
+        (lowerE, fixed_dict) = roof_duality(bqm)        # Consider using the more aggressive form of fixing
         print('Lower Energy-Bound %f' % (lowerE))
-        bqm_full = bqm.copy()
-        # fixed_dict_roof = fix_variables(bqm)
-        # fixed_dict_strong = fix_variables(bqm, sampling_mode=False)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
-        print('new length: %d' % (bqm.num_variables))
+        bqm_networkx = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
+        en_networkx = deepcopy(bqm_networkx)
+        cp_networkx = deepcopy(bqm_networkx)
+
+        for c in np.arange(1, C):
+            for node, nbr_dict in bqm_networkx.nodes(data='h_bias'), bqm_networkx.adj:
+                n, hh = node
+                if c == 1:
+                    en_networkx.nodes[n]['h_bias'] = hh/C
+                en_networkx.add_node(n + c*orig_lin_length, hh/C)
+                cp_networkx.add_node(n + c*orig_lin_length, hh)
+
+            for (n, nn, JJ) in bqm_networkx.edges(data='J_bias'):
+                for cc in np.arange(c):
+                    en_networkx.add_edge(n + c*orig_quad_length, nn + cc*orig_quad_length, max_J)
+                en_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, JJ/C)
+                cp_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, JJ)
+
+        en_bqm = BQM.from_networkx_graph(en_networkx)
+        cp_bqm = BQM.from_networkx_graph(cp_networkx)
+        print('new length: %d' % (en_bqm.num_variables))
 
         if GRAPHING:
             J_np_array2 = np.array(list(J.values()))
@@ -259,31 +284,30 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             plt.xlabel('J')
             plt.savefig('J_Hist_Removal.png', dpi=300)
 
-    if (not FIXING_VARIABLES) or bqm.num_variables > 0:
-        '''mapping = []
-        offset = 0
-        for i in range(len(C_i)):
-            if i in bqm:
-                mapping.append(None)
-                offset += 1
-            else:
-                mapping.append(i - offset)'''
-        
+    if (not FIXING_VARIABLES) or en_bqm.num_variables > 0:
         # run gauges
         nreads = 200
         # qaresults = np.zeros((ngauges*nreads, len(h)))
-        qaresults = np.zeros((ngauges*nreads, bqm.num_variables))
+        en_qaresults = np.zeros((ngauges*nreads, en_bqm.num_variables))
+        if QAC:
+            cp_qaresults = np.zeros((ngauges*nreads, cp_bqm.num_variables))
         for g in range(ngauges):
             embedded = False
             for attempt in range(5):
                 # a = np.sign(np.random.rand(len(h)) - 0.5)
-                a = np.sign(np.random.rand(bqm.num_variables) - 0.5)
+                en_a = np.sign(np.random.rand(en_bqm.num_variables) - 0.5)
+                if QAC:
+                    # a = np.sign(np.random.rand(len(h)) - 0.5)
+                    cp_a = np.sign(np.random.rand(cp_bqm.num_variables) - 0.5)
 
                 # Need to make J and A NetworkX Graphs (var type)
-                J_NetworkX = to_networkx_graph(bqm, node_attribute_name='h_bias', edge_attribute_name='J_bias')
-                embedding = find_embedding(J_NetworkX, A)
+                en_embedding = find_embedding(en_networkx, A)
+                if QAC:
+                    cp_embedding = find_embedding(cp_networkx, A)
                 try:
-                    th, tJ = embed_ising(get_node_attributes(J_NetworkX, 'h_bias'), get_edge_attributes(J_NetworkX, 'J_bias'), embedding, A_adj)
+                    en_th, en_tJ = embed_ising(get_node_attributes(en_networkx, 'h_bias'), get_edge_attributes(en_networkx, 'J_bias'), en_embedding, A_adj)
+                    if QAC:
+                        cp_th, cp_tJ = embed_ising(get_node_attributes(cp_networkx, 'h_bias'), get_edge_attributes(cp_networkx, 'J_bias'), cp_embedding, A_adj)
                     embedded = True
                     break
                 except ValueError:      # no embedding found
@@ -292,20 +316,23 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     continue
             
             # adjust chain strength
-            for k in list(tJ.keys()):
-                tJ[k] /= strength_scale 
-            for k in list(th.keys()):
-                th[k] /= strength_scale 
-
-            emb_j =  tJ.copy()
-            #emb_j.update(jc) -> "jc" not returned anymore bc embed func changed
+            for k in list(en_th.keys()):
+                en_th[k] /= strength_scale 
+                if QAC:
+                    cp_th[k] /= strength_scale
+            for k in list(en_tJ.keys()):
+                en_tJ[k] /= strength_scale
+                if QAC:
+                    cp_tJ[k] /= strength_scale
 
             print(g)
             print("Quantum annealing")
             try_again = True
             while try_again:
                 try:
-                    qaresult = sampler.sample_ising(th, emb_j, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    en_qaresult = sampler.sample_ising(en_th, en_tJ, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
+                    if QAC:
+                        cp_qaresult = sampler.sample_ising(cp_th, cp_tJ, num_reads = nreads, annealing_time = a_time, answer_mode='raw')
                     try_again = False
                 except:
                     print('runtime or ioerror, trying again')
@@ -315,57 +342,101 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
 
             while embedded:
                 try:
-                    # unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm_full)
-                    unembed_qaresult = unembed_sampleset(qaresult, embedding, bqm)
+                    unembed_en_qaresult = unembed_sampleset(en_qaresult, en_embedding, en_bqm)
+                    if QAC:
+                        unembed_cp_qaresult = unembed_sampleset(cp_qaresult, cp_embedding, cp_bqm)
                     embedded = False
                 except Exception as e:
                     print('Error unembedding answer:', e)
                     anneal_results["errors"].append('_error%s' % e)
                     make_output_file(failnote='FAILED__')
                     sys.exit(1)
-            for i in range(len(unembed_qaresult.record.sample)):
-                unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+            for i in range(len(unembed_en_qaresult.record.sample)):
+                unembed_en_qaresult.record.sample[i, :] = unembed_en_qaresult.record.sample[i, :] * a
                 # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
-            qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
+            en_qaresults[g*nreads:(g+1)*nreads] = unembed_en_qaresult.record.sample
+            if QAC:
+                for i in range(len(unembed_cp_qaresult.record.sample)):
+                    unembed_cp_qaresult.record.sample[i, :] = unembed_cp_qaresult.record.sample[i, :] * a
+                    # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
+                cp_qaresults[g*nreads:(g+1)*nreads] = unembed_cp_qaresult.record.sample
         
-        full_strings = np.zeros((len(qaresults), len(C_i)))
-        if FIXING_VARIABLES:
+        en_full_strings = np.zeros((len(en_qaresults), len(C_i)))
+        if QAC:
+            cp_full_strings = np.zeros((len(cp_qaresults), len(C_i)))
+        if FIXING_VARIABLES and QAC:
             j = 0
             for i in range(len(C_i)):
                 if i in fixed_dict:
-                    full_strings[:, i] = 2*fixed_dict[i] - 1  
+                    en_full_strings[:, i] = 2*fixed_dict[i] - 1
+                    cp_full_strings[:, i] = 2*fixed_dict[i] - 1
                 else:
-                    full_strings[:, i] = qaresults[:, j]  
+                    en_full_strings[:, i] = en_qaresults[:, j]  
+                    cp_full_strings[:, i] = cp_qaresults[:, j]  
+                    j += 1
+        elif FIXING_VARIABLES:
+            j = 0
+            for i in range(len(C_i)):
+                if i in fixed_dict:
+                    en_full_strings[:, i] = 2*fixed_dict[i] - 1
+                else:
+                    en_full_strings[:, i] = en_qaresults[:, j]  
                     j += 1
         else:
-            full_strings = qaresults  
+            full_strings = en_qaresults
         
-        s = full_strings 
-        energies = np.zeros(len(qaresults))
-        s[np.where(s > 1)] = 1.0
-        s[np.where(s < -1)] = -1.0
-        bits = len(s[0])
-        for i in range(bits):
-            energies += 2*s[:, i]*(-sigma[i]*C_i[i])
-            for j in range(bits):
-                if j > i:
-                    energies += 2*s[:, i]*s[:, j]*sigma[i]*sigma[j]*C_ij[i][j]
-                energies += 2*s[:, i]*sigma[i]*C_ij[i][j] * mu[j]
-        
-        unique_energies, unique_indices = np.unique(energies, return_index=True)
-        ground_energy = np.amin(unique_energies)
-        if ground_energy < 0:
-            threshold_energy = (1 - energy_fraction) * ground_energy
+        if QAC:
+            s = full_strings 
+            en_energies = np.zeros(len(en_qaresults))
+            s[np.where(s > 1)] = 1.0
+            s[np.where(s < -1)] = -1.0
+            bits = len(s[0])
+            for i in range(bits):
+                en_energies += 2*s[:, i]*(-sigma[i]*C_i[i])
+                for j in range(bits):
+                    if j > i:
+                        en_energies += 2*s[:, i]*s[:, j]*sigma[i]*sigma[j]*C_ij[i][j]
+                    en_energies += 2*s[:, i]*sigma[i]*C_ij[i][j] * mu[j]
+            
+            unique_energies, unique_indices = np.unique(en_energies, return_index=True)
+            ground_energy = np.amin(unique_energies)
+            if ground_energy < 0:
+                threshold_energy = (1 - energy_fraction) * ground_energy
+            else:
+                threshold_energy = (1 + energy_fraction) * ground_energy
+            lowest = np.where(unique_energies < threshold_energy)
+            unique_indices = unique_indices[lowest]
+            if len(unique_indices) > max_excited_states:
+                sorted_indices = np.argsort(en_energies[unique_indices])[-max_excited_states:]
+                unique_indices = unique_indices[sorted_indices]
+            final_answers = full_strings[unique_indices]
+            print('number of selected excited states', len(final_answers))
         else:
-            threshold_energy = (1 + energy_fraction) * ground_energy
-        lowest = np.where(unique_energies < threshold_energy)
-        unique_indices = unique_indices[lowest]
-        if len(unique_indices) > max_excited_states:
-            sorted_indices = np.argsort(energies[unique_indices])[-max_excited_states:]
-            unique_indices = unique_indices[sorted_indices]
-        final_answers = full_strings[unique_indices]
-        print('number of selected excited states', len(final_answers))
-        
+            s = full_strings 
+            en_energies = np.zeros(len(en_qaresults))
+            s[np.where(s > 1)] = 1.0
+            s[np.where(s < -1)] = -1.0
+            bits = len(s[0])
+            for i in range(bits):
+                en_energies += 2*s[:, i]*(-sigma[i]*C_i[i])
+                for j in range(bits):
+                    if j > i:
+                        en_energies += 2*s[:, i]*s[:, j]*sigma[i]*sigma[j]*C_ij[i][j]
+                    en_energies += 2*s[:, i]*sigma[i]*C_ij[i][j] * mu[j]
+            
+            unique_energies, unique_indices = np.unique(en_energies, return_index=True)
+            ground_energy = np.amin(unique_energies)
+            if ground_energy < 0:
+                threshold_energy = (1 - energy_fraction) * ground_energy
+            else:
+                threshold_energy = (1 + energy_fraction) * ground_energy
+            lowest = np.where(unique_energies < threshold_energy)
+            unique_indices = unique_indices[lowest]
+            if len(unique_indices) > max_excited_states:
+                sorted_indices = np.argsort(en_energies[unique_indices])[-max_excited_states:]
+                unique_indices = unique_indices[sorted_indices]
+            final_answers = full_strings[unique_indices]
+            print('number of selected excited states', len(final_answers))
         return final_answers
         
     else:
