@@ -20,7 +20,7 @@ from contextlib import closing
 from copy import deepcopy
 from dimod import fix_variables, BinaryQuadraticModel as BQM, to_networkx_graph
 from multiprocessing import Pool
-from dwave.cloud import Client 
+from dwave.cloud import Client
 from minorminer import find_embedding
 from dwave.embedding import embed_ising, unembed_sampleset
 from dwave.embedding import chain_breaks, is_valid_embedding, verify_embedding
@@ -47,12 +47,10 @@ n_iterations = 8
 AUGMENT_CUTOFF_PERCENTILE = 90
 AUGMENT_SIZE = 13        # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.0225 / AUGMENT_SIZE
-C = 4
+C = 4 
 QAC = False
 if C > 1:
     QAC = True
-
-GRAPHING = False
 
 platform = None
 class DWavePlatform:
@@ -113,8 +111,6 @@ def init():
             cant_connect = True
     return (sampler.adjacency, sampler.to_networkx_graph())
 
-# def cutoff_Js ()
-
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
     h = 0 - np.dot(s, C_i)
@@ -147,75 +143,6 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
             h_i += 2*(sigma[i]*C_ij[i][j]*mu[j]) 
         h[i] = h_i
 
-    if GRAPHING:
-        h_array = h
-        print(describe(h))
-        plt.figure(0, figsize=(9, 4))
-        plt.hist(h, bins=200, zorder=4, range=(np.min(h), np.max(h)))
-        plt.plot([-0.00095, 0.00095], [39, 39], color='r', marker='|')
-        plt.plot([-0.15115, -0.14885], [39, 39], color='k', marker='|')
-        plt.plot([0.0491, 0.0509], [39, 39], color='g', marker='|')
-        plt.title('Histogram of h Values')
-        plt.grid(color='#808080', zorder=3)
-        plt.ylim(0, 40)
-        plt.ylabel('Count')
-        plt.xlabel('h')
-        plt.savefig('h_Hist.png', dpi=300)
-
-        J_np_array1 = np.array(list(J.values()))
-        print(describe(J_np_array1))
-        plt.figure(1, figsize=(9, 4))
-        plt.hist(J_np_array1, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
-        plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
-        plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
-        plt.title('Histogram of J Values: Before Cutoff')
-        plt.grid(color='#808080', zorder=3)
-        plt.ylim(0, 2700)
-        plt.ylabel('Count')
-        plt.xlabel('J')
-        plt.savefig('J_Hist_Before.png', dpi=300)
-
-        J_sums = np.empty(len(h))
-        for i in np.arange(len(h)):
-            for j in np.arange(len(h)):
-                if j > i and (i, j) in J:
-                    J_sums[i] = np.abs(J[(i, j)])
-                    J_sums[j] = np.abs(J[(i, j)])
-                else:
-                    if j < i:
-                        j = i
-                    continue
-        strength_array = h_array / J_sums
-        plt.figure(4, figsize=(9, 4))
-        plt.hist(strength_array, bins=200, zorder=4, range=(np.min(strength_array), np.max(strength_array)), label='Full Distribution of Strengths: %d' % (np.size(strength_array)))
-        plt.title('Histogram of (All) Coupling Strengths')
-        plt.grid(color='#808080', zorder=3)
-        plt.ylabel('Count')
-        plt.xlabel('Strengths {h/Σ(J)}')
-        plt.legend()
-        plt.savefig('Strengths_Hist.png', dpi=300)
-
-        strength_array_majority = strength_array[strength_array >= -2500]
-        plt.figure(5, figsize=(9, 4))
-        plt.hist(strength_array_majority, bins=200, zorder=4, range=(np.min(strength_array_majority), np.max(strength_array_majority)), label='Majority of Strengths: %d' % (np.size(strength_array_majority)))
-        plt.title('Histogram of (Most) Coupling Strengths')
-        plt.grid(color='#808080', zorder=3)
-        plt.ylabel('Count')
-        plt.xlabel('Strengths {h/Σ(J)}')
-        plt.legend()
-        plt.savefig('Strengths_Majority_Hist.png', dpi=300)
-
-        strength_array_strongest = strength_array[(strength_array >= -10) & (strength_array <= 10)]
-        plt.figure(6, figsize=(9, 4))
-        plt.hist(strength_array_strongest, bins=200, zorder=4, range=(np.min(strength_array_strongest), np.max(strength_array_strongest)), label='Within 1 OOM Strengths: %d' % (np.size(strength_array_strongest)))
-        plt.title('Histogram of (Strongest) Coupling Strengths')
-        plt.grid(color='#808080', zorder=3)
-        plt.ylabel('Count')
-        plt.xlabel('Strengths {h/Σ(J)}')
-        plt.legend()
-        plt.savefig('Strengths_Strongest_Hist.png', dpi=300)
-
-
     vals = np.array(list(J.values()))
     max_J = np.max(vals)
     cutoff = np.percentile(vals, AUGMENT_CUTOFF_PERCENTILE)
@@ -240,73 +167,56 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
         cp_networkx = deepcopy(bqm_networkx)
 
         for c in np.arange(1, C):
-            for node, nbr_dict in bqm_networkx.nodes(data='h_bias'), bqm_networkx.adj:
+            for node in bqm_networkx.nodes(data='h_bias'):
                 n, hh = node
                 if c == 1:
                     en_networkx.nodes[n]['h_bias'] = hh/C
-                en_networkx.add_node(n + c*orig_lin_length, hh/C)
-                cp_networkx.add_node(n + c*orig_lin_length, hh)
+                en_networkx.add_node(n + c*orig_lin_length, h_bias=hh/C)
+                cp_networkx.add_node(n + c*orig_lin_length, h_bias=hh)
 
             for (n, nn, JJ) in bqm_networkx.edges(data='J_bias'):
                 for cc in np.arange(c):
-                    en_networkx.add_edge(n + c*orig_quad_length, nn + cc*orig_quad_length, max_J)
-                en_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, JJ/C)
-                cp_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, JJ)
+                    en_networkx.add_edge(n + c*orig_quad_length, nn + cc*orig_quad_length, J_bias=max_J)
+                en_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, J_bias=JJ/C)
+                cp_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, J_bias=JJ)
 
         en_bqm = BQM.from_networkx_graph(en_networkx)
         cp_bqm = BQM.from_networkx_graph(cp_networkx)
         print('new length: %d' % (en_bqm.num_variables))
 
-        if GRAPHING:
-            J_np_array2 = np.array(list(J.values()))
-            print(describe(J_np_array2))
-            plt.figure(2, figsize=(9, 4))
-            plt.hist(J_np_array2, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
-            plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
-            plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
-            plt.title('Histogram of J Values: After Cutoff')
-            plt.grid(color='#808080', zorder=3)
-            plt.ylim(0, 2700)
-            plt.ylabel('Count')
-            plt.xlabel('J')
-            plt.savefig('J_Hist_After.png', dpi=300)
-
-            J_np_array_rmweak = np.delete(J_np_array1, np.argwhere((J_np_array1 >= -0.00015) & (J_np_array1 <= 0.00015)))
-            print(describe(J_np_array_rmweak))
-            plt.figure(3, figsize=(9, 4))
-            plt.hist(J_np_array_rmweak, bins=200, zorder=4, range=(np.min(J_np_array1), np.max(J_np_array1)))
-            plt.errorbar(0.0002349, 2500, 0, 0.0007, color='r', capsize=10, marker='o')
-            plt.errorbar(0, 2300, 0, 0.0007, color='g', capsize=10, marker='o')
-            plt.title('Histogram of J Values: Removed Weak Chains')
-            plt.grid(color='#808080', zorder=3)
-            plt.ylim(0, 2700)
-            plt.ylabel('Count')
-            plt.xlabel('J')
-            plt.savefig('J_Hist_Removal.png', dpi=300)
-
     if (not FIXING_VARIABLES) or en_bqm.num_variables > 0:
+        print('1')
         # run gauges
         nreads = 200
         # qaresults = np.zeros((ngauges*nreads, len(h)))
+        print('2')
         en_qaresults = np.zeros((ngauges*nreads, en_bqm.num_variables))
         if QAC:
+            print('3')
             cp_qaresults = np.zeros((ngauges*nreads, cp_bqm.num_variables))
         for g in range(ngauges):
+            print('4')
             embedded = False
             for attempt in range(5):
                 # a = np.sign(np.random.rand(len(h)) - 0.5)
+                print('5')
                 en_a = np.sign(np.random.rand(en_bqm.num_variables) - 0.5)
                 if QAC:
                     # a = np.sign(np.random.rand(len(h)) - 0.5)
+                    print('6')
                     cp_a = np.sign(np.random.rand(cp_bqm.num_variables) - 0.5)
 
                 # Need to make J and A NetworkX Graphs (var type)
+                print('7')
                 en_embedding = find_embedding(en_networkx, A)
                 if QAC:
+                    print('8')
                     cp_embedding = find_embedding(cp_networkx, A)
                 try:
+                    print('9')
                     en_th, en_tJ = embed_ising(get_node_attributes(en_networkx, 'h_bias'), get_edge_attributes(en_networkx, 'J_bias'), en_embedding, A_adj)
                     if QAC:
+                        print('10')
                         cp_th, cp_tJ = embed_ising(get_node_attributes(cp_networkx, 'h_bias'), get_edge_attributes(cp_networkx, 'J_bias'), cp_embedding, A_adj)
                     embedded = True
                     break
@@ -352,12 +262,12 @@ def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, ma
                     make_output_file(failnote='FAILED__')
                     sys.exit(1)
             for i in range(len(unembed_en_qaresult.record.sample)):
-                unembed_en_qaresult.record.sample[i, :] = unembed_en_qaresult.record.sample[i, :] * a
+                unembed_en_qaresult.record.sample[i, :] = unembed_en_qaresult.record.sample[i, :] * en_a
                 # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
             en_qaresults[g*nreads:(g+1)*nreads] = unembed_en_qaresult.record.sample
             if QAC:
                 for i in range(len(unembed_cp_qaresult.record.sample)):
-                    unembed_cp_qaresult.record.sample[i, :] = unembed_cp_qaresult.record.sample[i, :] * a
+                    unembed_cp_qaresult.record.sample[i, :] = unembed_cp_qaresult.record.sample[i, :] * cp_a
                     # unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a_prime
                 cp_qaresults[g*nreads:(g+1)*nreads] = unembed_cp_qaresult.record.sample
         
@@ -492,7 +402,7 @@ def make_output_file(failnote=''):
     json.dump(anneal_results, open(filepath, 'w'), indent=4)
     return filename
 
-def make_graph_file(problem_graph, sampling_mode=True):
+def make_graph_file(problem_graph, sampling_mode=True): # Creates .xml files for graph visualization
     if FIXING_VARIABLES:
         if sampling_mode:
             filename = '%2d-%s-problem_graph-%s.xml' % (AUGMENT_CUTOFF_PERCENTILE, 'ROOF', timestamp)
@@ -628,7 +538,7 @@ def help():
     print('quantum_annealing.py [options]')
     print('options: (ignore "" when typing examples)')
     print('  --help                          Show this help message')
-    print('  --timestamp <int>            Sets the time of the total run')
+    print('  --timestamp <int>               Sets the time of the total run')
     print('  --architecture <str>            Sets which type of Quantum Annealer (QA) to use')
     print('                                    eg. "PEGASUS" or "CHIMERA" ONLY use these two')
     print('  --fixing_vars <bool>            Sets (T/F) whether or not to fix variables using DWave')

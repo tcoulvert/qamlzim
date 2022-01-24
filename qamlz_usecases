@@ -1,0 +1,30 @@
+Use Cases
+- Researcher using different pruning
+- Researcher wanting to build binary classifier for other events (HEP not necessarily Higgs)
+    - Potentially useful for binary classification outside of HEP
+- Porting qamlz to a different quantum hardware
+
+Jobs/Responsibilities
+- Abstracting away from D-Wave (ease of use)
+- Binary classification model
+- Interoperability of qamlz model with other binary classifier frameworks??
+    - Functions to export model into shared form??
+- Safety/Runability checks on user jobs??
+
+NOT Jobs
+- Users job to separate train and test dataset
+- Deep analysis and comparisons of results
+
+Nouns
+- Input datasets
+- problem??
+- model
+- quantum machine
+- results (train accuracy, test accuracy, performance statistic)
+
+Actions
+- dataset preprocessing
+- problem pruning
+- error correction
+- dwave annealing
+- model postprocessing
