@@ -118,7 +118,7 @@ def total_hamiltonian(s, C_i, C_ij):
         h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
     return h
     
-def hamiltonian(s, C_i, C_ij, mu, sigma, reg):
+def hamiltonian(s, C_i, C_ij, mu, sigma):
     s[np.where(s > 1)] = 1.0
     s[np.where(s < -1)] = -1.0
     bits = len(s)
