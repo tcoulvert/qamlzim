@@ -132,7 +132,7 @@ def hamiltonian(s, C_i, C_ij, mu, sigma):
     return h
 
 
-def anneal(C_i, C_ij, mu, sigma, l, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A):
+def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A):
     h = np.zeros(len(C_i))
     J = {}
     for i in range(len(C_i)):
@@ -480,8 +480,6 @@ def main():
 
         # 4.1 - Create/update ML loop vars based on matrices
         sigma = np.ones(n_classifiers)
-        reg = 0.0
-        l0 = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
         strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
         energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
         gauges = [50, 10] + [1]*(n_iterations - 2)
@@ -491,10 +489,9 @@ def main():
         iterations = n_iterations
         for i in range(iterations):
             print('iteration', i)
-            l = reg*np.amax(np.diagonal(C_ij)*sigma*sigma - 2*sigma*C_i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, l, strengths[i], energy_fractions[i], gauges[i], max_states[i], A_adj, A)
+                excited_states = anneal(C_i, C_ij, mu, sigma, strengths[i], energy_fractions[i], gauges[i], max_states[i], A_adj, A)
                 for s in excited_states:
                     new_energy = total_hamiltonian(mu + s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(len(s))
