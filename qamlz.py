@@ -21,29 +21,23 @@ class TrainEnv:
     # -> clear to both user and code what each array is
     # X_train, y_train should be formatted like scikit-learn data arrays are
     # -> X_train is the train data, y_train is the train labels
-    def __init__(self, X_train, y_train):
+    def __init__(self, X_train, y_train, X_validation=None, y_validation=None):
         self.X_train = X_train
         self.y_train = y_train
-        self.X_validation = None
-        self.y_validation = None
+        self.X_validation = X_validation
+        self.y_validation = y_validation
 
     # Splits training data into train and validation 
     # -> validation allows hyperparameter adjustment
-    def create_validation_data(self, n_splits=10, validation_pct=0.2, random_seed=None):
-        sss = StratifiedShuffleSplit(n_splits=n_splits, test_size=validation_pct, random_state=random_seed)
-
+    def sklearn_data_wrapper(self, sk_model):
         X_tra, X_val = [], []
         y_tra, y_val = [], []
-        for train_indices, validation_indices in sss.split(self.X_train, self.y_train):
+        for train_indices, validation_indices in sk_model.split(self.X_train, self.y_train):
             X_tra.append(self.X_train[train_indices]), X_val.append(self.X_train[validation_indices])
             y_tra.append(self.y_train[train_indices]), y_val.append(self.y_train[validation_indices])
         
         self.X_train, self.X_validation = np.array(X_tra), np.array(X_val)
         self.y_train, self.y_validation = np.array(y_tra), np.array(y_val)
-        
-    def set_validation_data(self, X_validation, y_validation):
-        self.X_validation = X_validation
-        self.y_validation = y_validation
 
 class Model:
     def __init__(self, config):
@@ -117,5 +111,11 @@ y = np.array([0, 0, 0, 1, 1, 1])
 X = np.array([[1, 2], [4, 5], [7, 8], [10, 11], [13, 14], [16, 17]])
 y = np.array([0, 0, 0, 1, 1, 1])
 
+X = np.arange(20)
+X = np.array(np.split(X, 5))
+print(X)
+y = np.array([0, 0, 1, 1, 1])
+
 env = TrainEnv(X, y)
-env.create_validation_data(n_splits=5, validation_pct=0.5, random_seed=0)
+sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
+env.sklearn_data_wrapper(sss)
