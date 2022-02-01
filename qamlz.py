@@ -28,32 +28,22 @@ class TrainEnv:
         self.y_validation = None
 
     # Splits training data into train and validation 
-    # -> allows hyperparameter adjustment
+    # -> validation allows hyperparameter adjustment
     def create_validation_data(self, n_splits=10, validation_pct=0.2, random_seed=None):
         sss = StratifiedShuffleSplit(n_splits=n_splits, test_size=validation_pct, random_state=random_seed)
 
-        # X_tra, X_val = np.empty((1,0)), np.empty((1,0))
-        # y_tra, y_val = np.empty((1,0)), np.empty((1,0))
-        # i = 0
+        X_tra, X_val = [], []
+        y_tra, y_val = [], []
         for train_indices, validation_indices in sss.split(self.X_train, self.y_train):
-            pass
-            # X_tra[i], X_val[i] = np.append(X_tra[i], self.X_train[train_indices]), np.append(X_val[i], self.X_train[validation_indices])
-            # y_tra, y_val = np.append(y_tra, self.y_train[train_indices]), np.append(y_val, self.y_train[validation_indices])
-            # i += 1
-
-        # print('X_tra:', X_tra.shape, 'X_val:', X_val, 'y_tra:', y_tra, 'y_val:', y_val)
-        # 
-        # train_sig, validation_sig = np.empty(), np.empty()
-        # train_bkg, validation_bkg = np.empty(), np.empty()
-        # for train_sig_indices, validation_sig_indices in sss.split(np.zeros(self.train_sig.size), self.train_sig):
-        #     train_sig.append(self.train_sig[train_sig_indices])
-        #     validation_sig.append(self.train_sig[validation_sig_indices])
-        # for train_bkg_indices, validation_bkg_indices in sss.split(np.zeros(self.train_bkg.size), self.train_bkg):
-        #     train_bkg.append(self.train_bkg[train_bkg_indices])
-        #     validation_bkg.append(self.train_bkg[validation_bkg_indices])
-        # self.train_sig, self.validation_sig = train_sig, validation_sig
-        # self.train_bkg, self.validation_bkg = train_bkg, validation_bkg
+            X_tra.append(self.X_train[train_indices]), X_val.append(self.X_train[validation_indices])
+            y_tra.append(self.y_train[train_indices]), y_val.append(self.y_train[validation_indices])
         
+        self.X_train, self.X_validation = np.array(X_tra), np.array(X_val)
+        self.y_train, self.y_validation = np.array(y_tra), np.array(y_val)
+        
+    def set_validation_data(self, X_validation, y_validation):
+        self.X_validation = X_validation
+        self.y_validation = y_validation
 
 class Model:
     def __init__(self, config):
@@ -122,6 +112,9 @@ def data_processing(sig, bkg):
     pass
 
 X = np.array([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
+y = np.array([0, 0, 0, 1, 1, 1])
+
+X = np.array([[1, 2], [4, 5], [7, 8], [10, 11], [13, 14], [16, 17]])
 y = np.array([0, 0, 0, 1, 1, 1])
 
 env = TrainEnv(X, y)
