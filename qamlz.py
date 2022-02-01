@@ -53,13 +53,20 @@ class Model:
         return
 
 class ModelConfig:
-    def __init__(self, n_iterations=10, zoom_factor=0.5):
+    def __init__(self, n_iterations=10, zoom_factor=0.5, augment_size=7):
         self.n_iterations = n_iterations
         self.zoom_factor = zoom_factor
+        self.augment_size = augment_size
+        self.augment_offset = 0.0225 / augment_size
 
         self.flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
-        self.flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))/2
+        self.flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4)) / 2
         FLIP_STATE = -1
+
+        self.strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
+        self.energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
+        self.gauges = [50, 10] + [1]*(n_iterations - 2)
+        self.max_states = [16, 4] + [1]*(n_iterations - 2)
         
 
 # Allows for basis of many hardware classes 
@@ -104,6 +111,26 @@ def error_correction(model):
 # -> should do the folding and iterating
 def data_processing(sig, bkg):
     pass
+
+
+
+
+# For now, keep outside package
+# -> formats data from higgs-specific CSVs, not general
+def format_data(sig, bkg, sk_model, n_splits=10):
+    sig = np.array(np.split(sig, n_splits))
+    bkg = np.array(np.split(bkg, n_splits))
+    X_temp = np.concatenate(sig, bkg)
+    y_temp = np.concatenate(np.ones(sig.size), -np.ones(bkg.size))
+
+    X_tra, X_val = [], []
+    y_tra, y_val = [], []
+    for train_indices, validation_indices in sk_model.split(X_temp, y_temp):
+        X_tra.append(X_temp[train_indices]), X_val.append(X_temp[validation_indices])
+        y_tra.append(y_temp[train_indices]), y_val.append(y_temp[validation_indices])
+
+    return (np.array(X_tra), np.array(X_val), np.array(y_tra), np.array(y_val))
+
 
 X = np.array([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
 y = np.array([0, 0, 0, 1, 1, 1])
