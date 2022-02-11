@@ -110,7 +110,7 @@ class DWaveQA(Hardware,dimod.BinaryQuadraticModel):
             description is not exactly correct in this case but it is the same idea as what we're doing.
         """
         offset_array = offset * (np.tile(np.arange(fidelity), m_events * n_params) - fidelity//2)
-        c_i = (np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * fidelity)
+        c_i = np.sign(np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * fidelity)
         
         return np.reshape(c_i, (m_events, n_params*fidelity))
 
