@@ -16,6 +16,8 @@ import sklearn as sk
 from dwave.system.samplers import DWaveSampler
 from sklearn.model_selection import StratifiedShuffleSplit
 
+# Numpy arrays should be row-major for best performance
+
 class TrainEnv:
     # require for the data to be passed as NP data arrays 
     # -> clear to both user and code what each array is
@@ -76,11 +78,41 @@ class Hardware(abc.ABC):
     def convert_from_networkx(self):
         pass
 
+    @abc.abstractmethod
+    def data_preprocessing(self):
+        pass
+
 # Specific class for DWave hardware
 class DWaveQA(Hardware,dimod.BinaryQuadraticModel):
     def __init__(self, name='Advantage_system4.2'):
         self.name = name
         self.sampler = None
+
+    # Hardware-depdendent function the pre- and post-processing on the input data
+    # -> should do the folding and iterating
+    # -> only needed for QA, not necessary in general
+    def data_processing(self, model_config, X_data):
+        offset = model_config.augment_offset
+        fidelity = model_config.augment_size
+        m_events, n_params = np.shape(X_data) # [M events (rows) x N parameters (columns)]
+        """
+            This duplicates the parameters 'fidelity' times. The purpose is to turn the weak classifiers
+            from outputing a single number (-1 or 1) to outputting a binary array ([-1, 1, 1,...]). The 
+            use of such a change is to trick the math into allowing more nuance between a weak classifier
+            that outputs 0.1 from a weak classifier that outputs 0.9 (the weak classifier outputs are continuous)
+            -> thereby discretizing the weak classifier's decision into more pieces than binary.
+        """
+        c_i = np.repeat(X_data, repeats=fidelity, axis=1) # [M events (rows) x N*fidelity parameters (columns)]
+        """
+            This creates a periodic array to shift the outputs of the repeated weak classifier, so that there
+            is a meaning to duplicating them. You can think of each successive digit of the resulting weak classifier
+            output array as being more specific about what the continuous output was - ie >0, >0.1, >0.2 etc. This 
+            description is not exactly correct in this case but it is the same idea as what we're doing.
+        """
+        offset_array = offset * (np.tile(np.arange(fidelity), m_events * n_params) - fidelity//2)
+        c_i = (np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * fidelity)
+        
+        return np.reshape(c_i, (m_events, n_params*fidelity))
 
     def convert_from_networkx(self, model):
         return dimod.BinaryQuadraticModel.from_networkx_graph(model)
@@ -105,11 +137,6 @@ def prune_variables(model):
 # Independent function for quantum error correction
 # -> should hold a single correction scheme to start (can always add)
 def error_correction(model):
-    pass
-
-# Indepdendent function the pre- and post-processing on the input data
-# -> should do the folding and iterating
-def data_processing(sig, bkg):
     pass
 
 

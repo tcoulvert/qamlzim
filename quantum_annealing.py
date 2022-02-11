@@ -370,7 +370,7 @@ def create_augmented_data(sig, bkg): # sig and bkg are only the portions sampled
     predictions = np.zeros((n_classifiers * scale, n_samples)) # make an array of zeroes at some length???
     for i in range(n_classifiers):
         for j in range(scale):
-            predictions[i*scale + j] = np.sign(predictions_raw[i] + (j-scale//2)*offset) / (n_classifiers * scale)
+            predictions[i*scale + j] = np.sign(predictions_raw[i] + (j - scale//2)*offset) / (n_classifiers * scale)
     y = np.concatenate((np.ones(len(sig)), -np.ones(len(bkg))))
     print('predictions', predictions)
     return predictions, y
@@ -385,7 +385,7 @@ def rand_delete(remaining_val, num_samples):
     # Potentially want to return array of sampled indeces, left in for convenience
     # picked_indeces = np.array()
     picked_values = np.array(0)
-    for i in range(int(num_samples)):
+    for i in range(num_samples):
         picked_index = rng.integers(0, len(remaining_val))
         # picked_indeces = np.append(picked_index)
         picked_values = np.append(picked_values, remaining_val[picked_index])
@@ -452,8 +452,8 @@ def main():
             #        randomly selected to train with that iteration
             #         - update "remaining" arrays for next loop by deleting the indeces of the data sampled that iteration, 
             #        so this stores a long-term record of unused indeces (a record across all iterations)
-            train_sig = rand_delete(remaining_sig, sig_pct*train_size)
-            train_bkg = rand_delete(remaining_bkg, bkg_pct*train_size)
+            train_sig = rand_delete(remaining_sig, int(sig_pct*train_size))
+            train_bkg = rand_delete(remaining_bkg, int(bkg_pct*train_size))
             
             # 3.3 - create/overwrite "test" arrays by temporarily deleting the indeces of the data sampled that iteration, 
             #        however at the next iteration test_sig will be overwritten to only have deleted the indeces used that 
