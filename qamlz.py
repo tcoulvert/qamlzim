@@ -47,6 +47,51 @@ class Model:
         # -> this is where user determines how the model will train
         self.config = config
         
+    def train(self, env, hardware):
+        C_i, C_ij = 
+        mus = [np.zeros(np.size(C_i))]
+        for i in range(self.config.n_iterations):
+            print('iteration', i)
+            new_mus = []
+            for mu in mus:
+                excited_states = hardware.anneal(C_i, C_ij, mu, sigma, strengths[i], energy_fractions[i], gauges[i], max_states[i], A_adj, A)
+                for s in excited_states:
+                    new_energy = total_hamiltonian(mu + s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
+                    flips = np.ones(len(s))
+                    for a in range(len(s)):
+                        temp_s = np.copy(s)
+                        temp_s[a] = 0
+                        old_energy = total_hamiltonian(mu + temp_s*sigma*zoom_factor, C_i, C_ij) / (train_size - 1)
+                        energy_diff = new_energy - old_energy
+                        if energy_diff > 0:
+                            flip_prob = flip_probs[i]
+                            flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
+                            flips[a] = flip
+                        else:
+                            flip_prob = flip_others_probs[i]
+                            flip = np.random.choice([1, flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
+                            flips[a] = flip
+                    flipped_s = s * flips
+                    new_mus.append(mu + flipped_s*sigma*zoom_factor)
+                sigma *= zoom_factor
+                mus = new_mus
+                
+                mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, timestamp)
+                mus_destdir = os.path.join(script_path, 'mus')
+                mus_filepath = (os.path.join(mus_destdir, mus_filename))
+                if not os.path.exists(mus_destdir):
+                    os.makedirs(mus_destdir)
+                np.save(mus_filepath, np.array(mus))
+                anneal_results['mus arrays'].append('mus%05d_iter%d-%s.npy')
+                anneal_results['errors'].append(0)
+            avg_arr_train =[]
+            avg_arr_test =[]
+            for mu in mus:
+                avg_arr_train.append(accuracy_score(y_train, ensemble(predictions_train, mu)))
+                avg_arr_test.append(accuracy_score(y_test, ensemble(predictions_test, mu)))
+            print('final average accuracy on train set: ', np.mean(np.array(avg_arr_train)))
+            print('final average accuracy on test set: ', np.mean(np.array(avg_arr_test)))
+            num += 1
 
     def evaluate(self, test_sig, test_bkg):
         # split data up and run model on test data
@@ -79,7 +124,7 @@ class Hardware(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def data_preprocessing(self):
+    def data_preprocess(self):
         pass
 
 # Specific class for DWave hardware
@@ -91,7 +136,7 @@ class DWaveQA(Hardware,dimod.BinaryQuadraticModel):
     # Hardware-depdendent function the pre- and post-processing on the input data
     # -> should do the folding and iterating
     # -> only needed for QA, not necessary in general
-    def data_processing(self, model_config, X_data):
+    def data_preprocess(self, model_config, X_data, y_data):
         offset = model_config.augment_offset
         fidelity = model_config.augment_size
         m_events, n_params = np.shape(X_data) # [M events (rows) x N parameters (columns)]
@@ -111,8 +156,12 @@ class DWaveQA(Hardware,dimod.BinaryQuadraticModel):
         """
         offset_array = offset * (np.tile(np.arange(fidelity), m_events * n_params) - fidelity//2)
         c_i = np.sign(np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * fidelity)
-        
-        return np.reshape(c_i, (m_events, n_params*fidelity))
+        c_i = np.reshape(c_i, (m_events, n_params*fidelity))
+
+        C_i = np.dot(y_data, c_i)
+        C_ij = np.einsum('ij,kj', c_i, c_i)
+
+        return C_i, C_ij
 
     def convert_from_networkx(self, model):
         return dimod.BinaryQuadraticModel.from_networkx_graph(model)
@@ -173,3 +222,8 @@ y = np.array([0, 0, 1, 1, 1])
 env = TrainEnv(X, y)
 sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
 env.sklearn_data_wrapper(sss)
+hardware = DWaveQA()
+
+bin_config = ModelConfig()
+bin_class = Model()
+bin_class.train(env, hardware)
