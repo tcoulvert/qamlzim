@@ -96,16 +96,16 @@ def scale_weights(th, tJ, strength_scale):
 
     return th, tJ
 
-def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A, sampler, prune_vars, cutoff, encode_vars, fix_vars=True, anneal_time=5):
+def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A, sampler, prune_vars, cutoff, encode_vars, fix_vars, nreads, anneal_time=5):
     h, J = make_h_J(C_i, C_ij, mu, sigma)
     if not prune_vars is None:
         J = prune_vars(J, cutoff)
     if encode_vars is None:
         bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_vars)
     else:
+        orig_len = np.size(h)
         bqm, bqm_networkx, fixed_dict = encode_vars(h, J, fix_vars)
-    
-    nreads = 200
+
     num_nodes = bqm.num_variables
     qaresults = np.zeros((ngauges*nreads, num_nodes))
     for g in range(ngauges):
@@ -269,7 +269,7 @@ class Model:
             sigma = pow(self.config.zoom_factor, i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, self.config.strengths[i], self.config.energy_fractions[i], self.config.gauges[i], self.config.max_states[i], A_adj, A, self.sampler, self.config.prune_vars, self.config.default_cutoff, self.config.encode_vars, self.config.fix_var)
+                excited_states = anneal(C_i, C_ij, mu, sigma, self.config.strengths[i], self.config.energy_fractions[i], self.config.gauges[i], self.config.max_states[i], A_adj, A, self.sampler, self.config.prune_vars, self.config.default_cutoff, self.config.encode_vars, self.config.fix_var, self.config.nreads)
                 for s in excited_states:
                     new_energy = total_hamiltonian(mu + s*sigma*self.config.zoom_factor, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(len(s))
