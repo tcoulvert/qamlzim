@@ -179,7 +179,6 @@ def main():
                 else:
                     poisson = np.ones(len(y_test))
                 
-                excited_predictions = []
                 bkg_grid = np.linspace(0, 1.05, num=1000)
                 sig_efficiencies = np.zeros((len(excited_weights), len(bkg_grid)))
                 valid_sig_efficiencies = np.zeros((len(excited_weights), len(bkg_grid)))

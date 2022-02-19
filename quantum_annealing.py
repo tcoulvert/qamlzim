@@ -117,20 +117,6 @@ def total_hamiltonian(s, C_i, C_ij):
     for i in range(bits):
         h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
     return h
-    
-def hamiltonian(s, C_i, C_ij, mu, sigma):
-    s[np.where(s > 1)] = 1.0
-    s[np.where(s < -1)] = -1.0
-    bits = len(s)
-    h = 0
-    for i in range(bits):
-        h += 2*s[i]*(-sigma[i]*C_i[i])
-        for j in range(bits):
-            if j > i:
-                h += 2*s[i]*s[j]*sigma[i]*sigma[j]*C_ij[i][j]
-            h += 2*s[i]*sigma[i]*C_ij[i][j] * mu[j]
-    return h
-
 
 def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A):
     h = np.zeros(len(C_i))

@@ -7,8 +7,6 @@ Use Cases
 Jobs/Responsibilities
 - Abstracting away from D-Wave (ease of use)
 - Binary classification model
-- Interoperability of qamlz model with other binary classifier frameworks??
-    - Functions to export model into shared form??
 - Safety/Runability checks on user jobs??
 
 NOT Jobs
@@ -16,11 +14,10 @@ NOT Jobs
 - Deep analysis and comparisons of results
 
 Nouns
-- Input datasets
-- problem??
+- Input datasets -> scikit-learn representation
 - model
-- quantum machine
-- results (train accuracy, test accuracy, performance statistic)
+- quantum machine -> turn into independent functions
+- results (train accuracy, test accuracy, performance statistic) -> scikit-learn representation
 
 Actions
 - dataset preprocessing
@@ -28,3 +25,7 @@ Actions
 - error correction
 - dwave annealing
 - model postprocessing
+
+What I Do
+- Simplify model training and annealing
+    - split large/complex functions into smaller chunks
