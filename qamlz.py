@@ -23,6 +23,144 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 # Numpy arrays should be row-major for best performance
 
+def total_hamiltonian(s, C_i, C_ij):
+    bits = len(s)
+    h = 0 - np.dot(s, C_i)
+    for i in range(bits):
+        h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
+    return h
+
+def make_h_J(C_i, C_ij, mu, sigma):
+    h = 2 * sigma * (np.einsum('ij, jk', C_ij, mu) - C_i)
+    J = 2 * np.triu(C_ij, k=1) * pow(sigma, 2)
+    
+    return h, J
+
+# Independent function for simplifying problem
+# -> should hold a couple simple pruning methods
+def default_prune(J, cutoff_percentile):
+    cutoff_plus = np.percentile(J, cutoff_percentile)
+    cutoff_minus = np.percentile(-J, cutoff_percentile)
+
+    return J[np.logical_or(J > cutoff_plus, J < cutoff_minus)]
+
+def make_bqm(h, J, fix_var):
+    bqm_nx = nx.from_numpy_matrix(J)
+    atrr_arr = np.repeat(np.array(['h_bias']), np.size(h))
+    atrr_arr = np.column_stack(atrr_arr, h)
+    for val in np.nditer(atrr_arr):
+        val = dict(val)
+    h_dict = np.column_stack(np.arange(np.size(h)), atrr_arr)
+    bqm_nx.add_nodes_from(h_dict)
+    
+    bqm = dimod.from_networkx_graph(bqm_nx, vartype='SPIN', node_attribute_name='h_bias', edge_attribute_name='J_bias')
+    if fix_var:
+        fixed_dict = dimod.roof_duality.fix_variables(bqm)        # Consider using the more aggressive form of fixing
+        for i in fixed_dict.keys():
+            bqm.fix_variable(i, fixed_dict[i])
+
+    return bqm, bqm_nx, fixed_dict
+
+# Independent function for quantum error correction
+# -> should hold a single correction scheme to start (can always add)
+def default_qac(h, J, fix_var, C=4):
+    rows, cols = np.shape(J)
+    con_J = J + J.T + np.max(np.ndarray.flatten(J))*np.eye(rows, cols)
+    qa_J = np.zeros(C * (rows, cols))
+    for i in np.arange(C):
+        for j in np.arange(i, C):
+            if i==j:
+                qa_J[i*rows : (i+1)*rows, j*cols : (j+1)*cols] = J
+            else:
+                qa_J[i*rows : (i+1)*rows, j*cols : (j+1)*cols] = con_J
+    h = np.repeat(h, C) * C
+
+    return make_bqm(h, qa_J, fix_var)
+
+# Used to compare/benchmark the performance of the error correction
+def default_copy(h, J, fix_var, C=4):
+    rows, cols = np.shape(J)
+    cp_J = np.zeros(C * (rows, cols))
+    for i in np.arange(C):
+        cp_J[i*rows : (i+1)*rows, i*cols : (i+1)*cols] = J
+    h = np.repeat(h, C)
+
+    return make_bqm(h, cp_J, fix_var)
+
+# adjust weights
+def scale_weights(th, tJ, strength_scale):
+    for k in list(th.keys()):
+        th[k] /= strength_scale 
+    for k in list(tJ.keys()):
+        tJ[k] /= strength_scale
+
+    return th, tJ
+
+def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A, sampler, prune_vars, cutoff, encode_vars, fix_vars=True, anneal_time=5):
+    h, J = make_h_J(C_i, C_ij, mu, sigma)
+    if not prune_vars is None:
+        J = prune_vars(J, cutoff)
+    if encode_vars is None:
+        bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_vars)
+    else:
+        bqm, bqm_networkx, fixed_dict = encode_vars(h, J, fix_vars)
+    
+    nreads = 200
+    num_nodes = bqm.num_variables
+    qaresults = np.zeros((ngauges*nreads, num_nodes))
+    for g in range(ngauges):
+        a = np.sign(np.random.rand(num_nodes) - 0.5)
+        embedding = minorminer.find_embedding(bqm_networkx, A)
+        th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_networkx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_networkx, 'J_bias'), embedding, A_adj)
+        th, tJ = scale_weights(th, tJ, strength_scale)
+
+        qaresult = sampler.sample_ising(th, tJ, num_reads = nreads, annealing_time=anneal_time, answer_mode='raw')
+        unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, embedding, bqm)
+
+        for i in range(len(unembed_qaresult.record.sample)):
+            unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
+        qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
+
+    full_strings = np.zeros((len(qaresults), len(C_i)))
+    if fix_vars:
+        j = 0
+        for i in range(len(C_i)):
+            if i in fixed_dict:
+                full_strings[:, i] = 2*fixed_dict[i] - 1
+            else:
+                full_strings[:, i] = qaresults[:, j]  
+                j += 1
+    else:
+        full_strings = qaresults
+
+    s = full_strings 
+    en_energies = np.zeros(len(qaresults))
+    s[np.where(s > 1)] = 1.0
+    s[np.where(s < -1)] = -1.0
+    bits = len(s[0])
+    for i in range(bits):
+        en_energies += 2*s[:, i]*(-sigma*C_i[i])
+        for j in range(bits):
+            if j > i:
+                en_energies += 2*s[:, i]*s[:, j]*pow(sigma, 2)*C_ij[i][j]
+            en_energies += 2*s[:, i]*sigma*C_ij[i][j] * mu[j]
+    
+    unique_energies, unique_indices = np.unique(en_energies, return_index=True)
+    ground_energy = np.amin(unique_energies)
+    if ground_energy < 0:
+        threshold_energy = (1 - energy_fraction) * ground_energy
+    else:
+        threshold_energy = (1 + energy_fraction) * ground_energy
+    lowest = np.where(unique_energies < threshold_energy)
+    unique_indices = unique_indices[lowest]
+    if len(unique_indices) > max_excited_states:
+        sorted_indices = np.argsort(en_energies[unique_indices])[-max_excited_states:]
+        unique_indices = unique_indices[sorted_indices]
+    final_answers = full_strings[unique_indices]
+    print('number of selected excited states', len(final_answers))
+    
+    return final_answers
+
 class TrainEnv:
     # require for the data to be passed as NP data arrays 
     # -> clear to both user and code what each array is
@@ -93,10 +231,13 @@ class ModelConfig:
         self.strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
         self.energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
         self.gauges = [50, 10] + [1]*(n_iterations - 2)
+        self.nreads = 200
         self.max_states = [16, 4] + [1]*(n_iterations - 2)
 
-        self.prune_vars = prune_variables()
-        self.encode_vars = error_correction()
+        self.fix_vars = True
+        self.prune_vars = default_prune
+        self.default_cutoff = 95
+        self.encode_vars = default_qac
 
 class Model:
     def __init__(self, config, endpoint_url, account_token):
@@ -105,6 +246,7 @@ class Model:
         self.config = config
         self.sampler = None
         self.create_sampler(endpoint_url, account_token)
+        
         self.anneal_results = {}
         self.mus_dict = {}
         
@@ -121,14 +263,13 @@ class Model:
         C_i, C_ij = env.data_preprocess(self.config.fidelity_offset, self.config.fidelity)
         A_adj, A = self.sampler.adjacency, self.sampler.to_networkx_graph()
         mus = [np.zeros(np.size(C_i))]
-        sigma = np.ones(np.size(C_i))
         train_size = np.shape(env.X_train)[0]
 
         for i in range(self.config.n_iterations):
-            print('iteration', i)
+            sigma = pow(self.config.zoom_factor, i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, self.config.strengths[i], self.config.energy_fractions[i], self.config.gauges[i], self.config.max_states[i], A_adj, A, self.sampler, self.config.prune_vars, self.config.encode_vars, self.config.fix_var)
+                excited_states = anneal(C_i, C_ij, mu, sigma, self.config.strengths[i], self.config.energy_fractions[i], self.config.gauges[i], self.config.max_states[i], A_adj, A, self.sampler, self.config.prune_vars, self.config.default_cutoff, self.config.encode_vars, self.config.fix_var)
                 for s in excited_states:
                     new_energy = total_hamiltonian(mu + s*sigma*self.config.zoom_factor, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(len(s))
@@ -170,170 +311,6 @@ class Model:
     
         return np.sign(np.dot(X_data.T, weights))
 
-def total_hamiltonian(s, C_i, C_ij):
-    bits = len(s)
-    h = 0 - np.dot(s, C_i)
-    for i in range(bits):
-        h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
-    return h
-
-def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A, sampler, prune_vars, encode_vars, fix_vars=True, anneal_time=5):
-    h, J = make_h_J(C_i, C_ij, mu, sigma)
-    if not prune_vars is None:
-        J = prune_vars(J)
-    if encode_vars is None:
-        bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_vars)
-    else:
-        bqm, bqm_networkx, fixed_dict = encode_vars(h, J, fix_vars)
-    
-    nreads = 200
-    num_nodes = bqm.num_variables
-    qaresults = np.zeros((ngauges*nreads, num_nodes))
-    for g in range(ngauges):
-        a = np.sign(np.random.rand(num_nodes) - 0.5)
-        embedding = minorminer.find_embedding(bqm_networkx, A)
-        th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_networkx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_networkx, 'J_bias'), embedding, A_adj)
-        th, tJ = scale_weights(th, tJ, strength_scale)
-
-        qaresult = sampler.sample_ising(th, tJ, num_reads = nreads, annealing_time=anneal_time, answer_mode='raw')
-        unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, embedding, bqm)
-
-        for i in range(len(unembed_qaresult.record.sample)):
-            unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
-        qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
-
-    full_strings = np.zeros((len(qaresults), len(C_i)))
-    if fix_vars:
-        j = 0
-        for i in range(len(C_i)):
-            if i in fixed_dict:
-                full_strings[:, i] = 2*fixed_dict[i] - 1
-            else:
-                full_strings[:, i] = qaresults[:, j]  
-                j += 1
-    else:
-        full_strings = qaresults
-
-    s = full_strings 
-    en_energies = np.zeros(len(qaresults))
-    s[np.where(s > 1)] = 1.0
-    s[np.where(s < -1)] = -1.0
-    bits = len(s[0])
-    for i in range(bits):
-        en_energies += 2*s[:, i]*(-sigma[i]*C_i[i])
-        for j in range(bits):
-            if j > i:
-                en_energies += 2*s[:, i]*s[:, j]*sigma[i]*sigma[j]*C_ij[i][j]
-            en_energies += 2*s[:, i]*sigma[i]*C_ij[i][j] * mu[j]
-    
-    unique_energies, unique_indices = np.unique(en_energies, return_index=True)
-    ground_energy = np.amin(unique_energies)
-    if ground_energy < 0:
-        threshold_energy = (1 - energy_fraction) * ground_energy
-    else:
-        threshold_energy = (1 + energy_fraction) * ground_energy
-    lowest = np.where(unique_energies < threshold_energy)
-    unique_indices = unique_indices[lowest]
-    if len(unique_indices) > max_excited_states:
-        sorted_indices = np.argsort(en_energies[unique_indices])[-max_excited_states:]
-        unique_indices = unique_indices[sorted_indices]
-    final_answers = full_strings[unique_indices]
-    print('number of selected excited states', len(final_answers))
-    
-    return final_answers
-
-
-def make_h_J(C_i, C_ij, mu, sigma):
-    h = np.zeros(len(C_i))
-    J = {}
-    for i in range(len(C_i)):
-        h_i = -2*sigma[i]*C_i[i]
-        for j in range(len(C_ij[0])):
-            if j > i:
-                J[(i, j)] = 2*C_ij[i][j]*sigma[i]*sigma[j]
-            h_i += 2*(sigma[i]*C_ij[i][j]*mu[j]) 
-        h[i] = h_i
-
-    return h, J
-
-# Independent function for simplifying problem
-# -> should hold a couple simple pruning methods
-def prune_variables(J, cutoff_percentile=95):
-    vals = np.array(list(J.values()))
-    max_J = np.max(vals)
-    cutoff = np.percentile(vals, cutoff_percentile)
-    to_delete = []
-    for k, v in J.items():
-        if v < cutoff:
-            to_delete.append(k)
-    for k in to_delete:
-        del J[k]
-
-    return J
-
-def make_bqm(h, J, fix_var):
-    bqm = dimod.BinaryQuadraticModel.from_ising(h, J)
-    if fix_var:
-        (lowerE, fixed_dict) = dw.preprocessing.roof_duality(bqm)        # Consider using the more aggressive form of fixing
-        for i in fixed_dict.keys():
-            bqm.fix_variable(i, fixed_dict[i])
-    bqm_networkx = bqm.to_networkx_graph(node_attribute_name='h_bias', edge_attribute_name='J_bias')
-
-    return bqm, bqm_networkx, fixed_dict
-
-# Independent function for quantum error correction
-# -> should hold a single correction scheme to start (can always add)
-def error_correction(h, J, fix_var, C=4):
-    bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_var)
-    orig_lin_length = bqm.num_variables
-    orig_quad_length = bqm.num_interactions
-    en_networkx = deepcopy(bqm_networkx)
-    for c in np.arange(1, C):
-        for node in bqm_networkx.nodes(data='h_bias'):
-            n, hh = node
-            if c == 1:
-                en_networkx.nodes[n]['h_bias'] = hh/C
-            en_networkx.add_node(n + c*orig_lin_length, h_bias=hh/C)
-
-        for (n, nn, JJ) in bqm_networkx.edges(data='J_bias'):
-            for cc in np.arange(c):
-                en_networkx.add_edge(n + c*orig_quad_length, nn + cc*orig_quad_length, J_bias=np.max(J))
-            en_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, J_bias=JJ/C)
-
-    en_bqm = dw.BinaryQuadraticModel.from_networkx_graph(en_networkx)
-
-    return en_bqm, en_networkx, fixed_dict
-
-# Used to compare/benchmark the performance of the error correction
-def copy_compare(h, J, fix_var, C=4):
-    bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_var)
-    orig_lin_length = bqm.num_variables
-    orig_quad_length = bqm.num_interactions
-    cp_networkx = deepcopy(bqm_networkx)
-    for c in np.arange(1, C):
-        for node in bqm_networkx.nodes(data='h_bias'):
-            n, hh = node
-            if c == 1:
-                cp_networkx.nodes[n]['h_bias'] = hh/C
-            cp_networkx.add_node(n + c*orig_lin_length, h_bias=hh/C)
-
-        for (n, nn, JJ) in bqm_networkx.edges(data='J_bias'):
-            for cc in np.arange(c):
-                cp_networkx.add_edge(n + c*orig_quad_length, nn + cc*orig_quad_length, J_bias=np.max(J))
-            cp_networkx.add_edge(n + c*orig_quad_length, nn + c*orig_quad_length, J_bias=JJ/C)
-
-    cp_bqm = dw.BinaryQuadraticModel.from_networkx_graph(cp_networkx)
-
-    return cp_bqm, cp_networkx, fixed_dict
-
-# adjust weights
-def scale_weights(th, tJ, strength_scale):
-    for k in list(th.keys()):
-        th[k] /= strength_scale 
-    for k in list(tJ.keys()):
-        tJ[k] /= strength_scale
-
-    return th, tJ
 
 # For now, keep outside package
 # -> formats data from higgs-specific CSVs, not general
