@@ -2,7 +2,6 @@
 import datetime
 import time
 
-import abc
 import dimod
 import dwave as dw
 import minorminer
@@ -18,12 +17,13 @@ from sklearn.model_selection import StratifiedShuffleSplit
 # Numpy arrays should be row-major for best performance
 
 # Used to calculate the total hamiltonian of a certain problem
-def total_hamiltonian(s, C_i, C_ij):
-    bits = len(s)
-    h = 0 - np.dot(s, C_i)
-    for i in range(bits):
-        h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
-    return h
+def total_hamiltonian(mu, sigma, C_i, C_ij):
+    ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
+    '''
+    ham = np.sum(-C_i + np.sum(np.einsum('ij, jk', np.triu(C_ij, k=1), mu))) * sigma
+    ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
+    
+    return ham
 
 # Makes the h and J np arrays for use in creating the bqm and networkx graph
 def make_h_J(C_i, C_ij, mu, sigma):
@@ -116,6 +116,9 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time):
 
 # Does the fullstring stuff -> modifies results by undoing variable fixing
 def full_string(qaresults, C_i, fix_vars, fixed_dict=None):
+    '''
+    TODO: see if can speed up the process
+    '''
     full_strings = np.zeros((len(qaresults), len(C_i)))
     if fix_vars:
         j = 0
@@ -132,6 +135,9 @@ def full_string(qaresults, C_i, fix_vars, fixed_dict=None):
 
 # Derives the energies obtained from the annealing
 def en_energy(s, sigma, qaresults, C_i, C_ij, mu):
+    '''
+    TODO: see if can speed up the process with numpy functions
+    '''
     en_energies = np.zeros(len(qaresults))
     s[np.where(s > 1)] = 1.0
     s[np.where(s < -1)] = -1.0
@@ -147,6 +153,9 @@ def en_energy(s, sigma, qaresults, C_i, C_ij, mu):
 
 # Picks out the unique energies out of the ones derived from en_energy
 def unique_energy(en_energies, config, iter):
+    '''
+    TODO: see if can speed up the process with numpy functions
+    '''
     unique_energies, unique_indices = np.unique(en_energies, return_index=True)
     ground_energy = np.amin(unique_energies)
     if ground_energy < 0:
@@ -161,8 +170,30 @@ def unique_energy(en_energies, config, iter):
     
     return unique_indices
 
-# Controls the annealing and ev=nergy selection process
-def anneal(C_i, C_ij, mu, sigma, config, iter, A_adj, A, sampler, anneal_time=5):
+def anneal(config, iter, C_i, C_ij, mu, sigma, A_adj, A, sampler, anneal_time=5):
+    ''' Controls the annealing and energy selection process.
+
+        TODO: move sigma to config?; change C_i and C_ij to env; change param ordering in function call;
+            remove A_adj and A b/c both under sampler
+
+        Called from train() multiple times. Each call to anneal performs a training step
+        on the D-Wave hardware.
+
+        Parameters:
+        - C_i          The intermediate form of your input data that defines the graph nodes.
+        - C_ij         The intermediate form of your input data that defines the graph edges.
+        - mu           Vector of expected values of qubit spins.
+        - sigma        The training rate in range [0..1]
+        - config       Configuration struct (hold many useful config params)
+        - iter         Declares the current iteration within the training method.
+                       This is needed because some configuration parameters are per-iteration arrays.
+        - A_adj        The adjacency <something> of the annealer.
+        - A            The networkx graph of the annealer.
+        - sampler      The connection to D-Wave.
+        - anneal_time  How long the annealing occurs. The longer you anneal, the better the
+                       result. But the longer you anneal, the higher the chance for decoherence
+                       (which yields garbage results). Units = microseconds.
+    '''
     prune_vars = config.prune_vars
     cutoff = config.cutoff
     encode_vars = config.encode_vars
@@ -295,13 +326,15 @@ class Model:
             new_mus = []
             for mu in mus:
                 excited_states = anneal(C_i, C_ij, mu, sigma, self.config, i, A_adj, A, self.sampler)
-                for s in excited_states:
-                    new_energy = total_hamiltonian(mu + s*sigma*self.config.zoom_factor, C_i, C_ij) / (train_size - 1)
-                    flips = np.ones(len(s))
-                    temp_s = np.copy(s)
-                    for a in range(len(s)):
+                for excited_state in excited_states:
+                    new_sigma = sigma * self.config.zoom_factor
+                    new_mu = mu + (sigma * excited_state)
+                    new_energy = total_hamiltonian(new_mu, new_sigma, C_i, C_ij) / (train_size - 1)
+                    flips = np.ones(np.size(excited_state))
+                    for a in range(len(excited_state)):
+                        temp_s = np.copy(excited_state)
                         temp_s[a] = 0
-                        old_energy = total_hamiltonian(mu + temp_s*sigma*self.config.zoom_factor, C_i, C_ij) / (train_size - 1)
+                        old_energy = total_hamiltonian(mu, temp_s, new_sigma, C_i, C_ij) / (train_size - 1)
                         energy_diff = new_energy - old_energy
                         if energy_diff > 0:
                             flip_prob = self.config.flip_probs[i]
@@ -311,7 +344,7 @@ class Model:
                             flip_prob = self.config.flip_others_probs[i]
                             flip = np.random.choice([1, self.config.flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
                             flips[a] = flip
-                    flipped_s = s * flips
+                    flipped_s = excited_state * flips
                     new_mus.append(mu + flipped_s*sigma*self.config.zoom_factor)
                 sigma *= self.config.zoom_factor
                 mus = new_mus
@@ -354,21 +387,21 @@ def format_data(sig, bkg, sk_model, n_splits=10):
     return (np.array(X_tra), np.array(X_val), np.array(y_tra), np.array(y_val))
 
 
-X = np.array([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
-y = np.array([0, 0, 0, 1, 1, 1])
+# X = np.array([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
+# y = np.array([0, 0, 0, 1, 1, 1])
 
-X = np.array([[1, 2], [4, 5], [7, 8], [10, 11], [13, 14], [16, 17]])
-y = np.array([0, 0, 0, 1, 1, 1])
+# X = np.array([[1, 2], [4, 5], [7, 8], [10, 11], [13, 14], [16, 17]])
+# y = np.array([0, 0, 0, 1, 1, 1])
 
-X = np.arange(20)
-X = np.array(np.split(X, 5))
-print(X)
-y = np.array([0, 0, 1, 1, 1])
+# X = np.arange(20)
+# X = np.array(np.split(X, 5))
+# print(X)
+# y = np.array([0, 0, 1, 1, 1])
 
-env = TrainEnv(X, y)
-sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
-env.sklearn_data_wrapper(sss)
+# env = TrainEnv(X, y)
+# sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
+# env.sklearn_data_wrapper(sss)
 
-bin_config = ModelConfig()
-bin_class = Model()
-bin_class.train(env)
+# bin_config = ModelConfig()
+# bin_class = Model()
+# bin_class.train(env)
