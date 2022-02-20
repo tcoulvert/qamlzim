@@ -18,7 +18,6 @@ n_folds = 8 # Must be same as n_iterations from run
 
 AUGMENT_SIZE = 9   # must be an odd number (since augmentation includes original value in middle)
 AUGMENT_OFFSET = 0.005625
-annnealing_time = 400
 
 POISSON = True
 b_start = 1000000
@@ -140,7 +139,6 @@ def main():
         poisson_runs = 5
     else:
         poisson_runs = 1
-    y_score_count = 0
     for i in range(len(train_sizes)):
         train_size = train_sizes[i]
         print('training with size', train_size)

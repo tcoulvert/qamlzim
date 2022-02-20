@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 import datetime
-import json
-import logging
-import os
-import subprocess
-import sys
 import time
 
 import abc
@@ -15,7 +10,6 @@ import networkx as nx
 import numpy as np
 import sklearn as sk
 
-from copy import deepcopy
 from dwave.system.samplers import DWaveSampler
 from sklearn.metrics import accuracy_score
 
@@ -23,6 +17,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 # Numpy arrays should be row-major for best performance
 
+# Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(s, C_i, C_ij):
     bits = len(s)
     h = 0 - np.dot(s, C_i)
@@ -30,6 +25,7 @@ def total_hamiltonian(s, C_i, C_ij):
         h += s[i] * np.dot(s[i+1:], C_ij[i][i+1:])
     return h
 
+# Makes the h and J np arrays for use in creating the bqm and networkx graph
 def make_h_J(C_i, C_ij, mu, sigma):
     h = 2 * sigma * (np.einsum('ij, jk', C_ij, mu) - C_i)
     J = 2 * np.triu(C_ij, k=1) * pow(sigma, 2)
@@ -39,11 +35,14 @@ def make_h_J(C_i, C_ij, mu, sigma):
 # Independent function for simplifying problem
 # -> should hold a couple simple pruning methods
 def default_prune(J, cutoff_percentile):
-    cutoff_plus = np.percentile(J, cutoff_percentile)
-    cutoff_minus = np.percentile(-J, cutoff_percentile)
+    rows, cols = np.shape(J)
+    sign_J = np.sign(J)
+    J = np.abs(np.ndarray.flatten(J))
+    np.where(J > cutoff_percentile, J, 0)
 
-    return J[np.logical_or(J > cutoff_plus, J < cutoff_minus)]
+    return np.broadcast_to(J * sign_J, (rows, cols))
 
+# makes a dwave bqm and corresponding networkx graph
 def make_bqm(h, J, fix_var):
     bqm_nx = nx.from_numpy_matrix(J)
     atrr_arr = np.repeat(np.array(['h_bias']), np.size(h))
@@ -88,39 +87,35 @@ def default_copy(h, J, fix_var, C=4):
     return make_bqm(h, cp_J, fix_var)
 
 # adjust weights
-def scale_weights(th, tJ, strength_scale):
+def scale_weights(th, tJ, strength):
     for k in list(th.keys()):
-        th[k] /= strength_scale 
+        th[k] /= strength 
     for k in list(tJ.keys()):
-        tJ[k] /= strength_scale
+        tJ[k] /= strength
 
     return th, tJ
 
-def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_excited_states, A_adj, A, sampler, prune_vars, cutoff, encode_vars, fix_vars, nreads, anneal_time=5):
-    h, J = make_h_J(C_i, C_ij, mu, sigma)
-    if not prune_vars is None:
-        J = prune_vars(J, cutoff)
-    if encode_vars is None:
-        bqm, bqm_networkx, fixed_dict = make_bqm(h, J, fix_vars)
-    else:
-        orig_len = np.size(h)
-        bqm, bqm_networkx, fixed_dict = encode_vars(h, J, fix_vars)
-
+# Does the actual DWave annealing and connecting
+def dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time):
     num_nodes = bqm.num_variables
-    qaresults = np.zeros((ngauges*nreads, num_nodes))
-    for g in range(ngauges):
+    qaresults = np.zeros((config.ngauges[iter]*config.nread, num_nodes))
+    for g in range(config.ngauges[iter]):
         a = np.sign(np.random.rand(num_nodes) - 0.5)
-        embedding = minorminer.find_embedding(bqm_networkx, A)
-        th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_networkx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_networkx, 'J_bias'), embedding, A_adj)
-        th, tJ = scale_weights(th, tJ, strength_scale)
+        embedding = minorminer.find_embedding(bqm_nx, A)
+        th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'J_bias'), embedding, A_adj)
+        th, tJ = scale_weights(th, tJ, config.strengths[iter])
 
-        qaresult = sampler.sample_ising(th, tJ, num_reads = nreads, annealing_time=anneal_time, answer_mode='raw')
+        qaresult = sampler.sample_ising(th, tJ, num_reads = config.nread, annealing_time=anneal_time, answer_mode='raw')
         unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, embedding, bqm)
 
         for i in range(len(unembed_qaresult.record.sample)):
             unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
-        qaresults[g*nreads:(g+1)*nreads] = unembed_qaresult.record.sample
+        qaresults[g*config.nread:(g+1)*config.nread] = unembed_qaresult.record.sample
 
+    return qaresults
+
+# Does the fullstring stuff -> modifies results by undoing variable fixing
+def full_string(qaresults, C_i, fix_vars, fixed_dict=None):
     full_strings = np.zeros((len(qaresults), len(C_i)))
     if fix_vars:
         j = 0
@@ -133,7 +128,10 @@ def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_e
     else:
         full_strings = qaresults
 
-    s = full_strings 
+    return full_strings
+
+# Derives the energies obtained from the annealing
+def en_energy(s, sigma, qaresults, C_i, C_ij, mu):
     en_energies = np.zeros(len(qaresults))
     s[np.where(s > 1)] = 1.0
     s[np.where(s < -1)] = -1.0
@@ -144,20 +142,47 @@ def anneal(C_i, C_ij, mu, sigma, strength_scale, energy_fraction, ngauges, max_e
             if j > i:
                 en_energies += 2*s[:, i]*s[:, j]*pow(sigma, 2)*C_ij[i][j]
             en_energies += 2*s[:, i]*sigma*C_ij[i][j] * mu[j]
-    
+
+    return en_energies
+
+# Picks out the unique energies out of the ones derived from en_energy
+def unique_energy(en_energies, config, iter):
     unique_energies, unique_indices = np.unique(en_energies, return_index=True)
     ground_energy = np.amin(unique_energies)
     if ground_energy < 0:
-        threshold_energy = (1 - energy_fraction) * ground_energy
+        threshold_energy = (1 - config.energy_fractions[iter]) * ground_energy
     else:
-        threshold_energy = (1 + energy_fraction) * ground_energy
+        threshold_energy = (1 + config.energy_fractions[iter]) * ground_energy
     lowest = np.where(unique_energies < threshold_energy)
     unique_indices = unique_indices[lowest]
-    if len(unique_indices) > max_excited_states:
-        sorted_indices = np.argsort(en_energies[unique_indices])[-max_excited_states:]
+    if len(unique_indices) > config.max_states[iter]:
+        sorted_indices = np.argsort(en_energies[unique_indices])[-config.max_states[iter]:]
         unique_indices = unique_indices[sorted_indices]
+    
+    return unique_indices
+
+# Controls the annealing and ev=nergy selection process
+def anneal(C_i, C_ij, mu, sigma, config, iter, A_adj, A, sampler, anneal_time=5):
+    prune_vars = config.prune_vars
+    cutoff = config.cutoff
+    encode_vars = config.encode_vars
+    fix_vars = config.fix_vars
+
+    h, J = make_h_J(C_i, C_ij, mu, sigma)
+    if not prune_vars is None:
+        J = prune_vars(J, cutoff)
+    if encode_vars is None:
+        bqm, bqm_nx, fixed_dict = make_bqm(h, J, fix_vars)
+    else:
+        orig_len = np.size(h)
+        bqm, bqm_nx, fixed_dict = encode_vars(h, J, fix_vars)
+
+    qaresults = dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time)
+
+    full_strings = full_string(qaresults, C_i, fix_vars, fixed_dict=fixed_dict)
+    en_energies = en_energy(full_strings, sigma, qaresults, C_i, C_ij, mu)
+    unique_indices = unique_energy(en_energies, config, iter)
     final_answers = full_strings[unique_indices]
-    print('number of selected excited states', len(final_answers))
     
     return final_answers
 
@@ -230,9 +255,9 @@ class ModelConfig:
 
         self.strengths = [3.0, 1.0, 0.5, 0.2] + [0.1]*(n_iterations - 4)
         self.energy_fractions = [0.08, 0.04, 0.02] + [0.01]*(n_iterations - 3)
-        self.gauges = [50, 10] + [1]*(n_iterations - 2)
-        self.nreads = 200
+        self.ngauges = [50, 10] + [1]*(n_iterations - 2)
         self.max_states = [16, 4] + [1]*(n_iterations - 2)
+        self.nread = 200
 
         self.fix_vars = True
         self.prune_vars = default_prune
@@ -269,7 +294,7 @@ class Model:
             sigma = pow(self.config.zoom_factor, i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, self.config.strengths[i], self.config.energy_fractions[i], self.config.gauges[i], self.config.max_states[i], A_adj, A, self.sampler, self.config.prune_vars, self.config.default_cutoff, self.config.encode_vars, self.config.fix_var, self.config.nreads)
+                excited_states = anneal(C_i, C_ij, mu, sigma, self.config, i, A_adj, A, self.sampler)
                 for s in excited_states:
                     new_energy = total_hamiltonian(mu + s*sigma*self.config.zoom_factor, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(len(s))
