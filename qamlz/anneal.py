@@ -3,11 +3,14 @@ import dwave as dw
 import minorminer
 import networkx as nx
 import numpy as np
-# import sklearn as sk
+import statistics as stat
+
+from random import randint
 
 # Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(mu, sigma, C_i, C_ij):
     ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
+        Dot products of upper triangle
     '''
     ham = np.sum(-C_i + np.sum(np.einsum('ij, jk', np.triu(C_ij, k=1), mu))) * sigma
     ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
@@ -42,8 +45,9 @@ def make_bqm(h, J, fix_var):
     bqm_nx.add_nodes_from(h_dict)
     
     bqm = dimod.from_networkx_graph(bqm_nx, vartype='SPIN', node_attribute_name='h_bias', edge_attribute_name='J_bias')
+    fixed_dict = None
     if fix_var:
-        fixed_dict = dimod.roof_duality.fix_variables(bqm)        # Consider using the more aggressive form of fixing
+        lowerE, fixed_dict = dw.preprocessing.roof_duality(bqm)        # Consider using the more aggressive form of fixing
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
 
@@ -51,7 +55,7 @@ def make_bqm(h, J, fix_var):
 
 # Independent function for quantum error correction
 # -> should hold a single correction scheme to start (can always add)
-def default_qac(h, J, fix_var, C=4):
+def default_qac(h, J, fix_var, C):
     rows, cols = np.shape(J)
     con_J = J + J.T + np.max(np.ndarray.flatten(J))*np.eye(rows, cols)
     qa_J = np.zeros(C * (rows, cols))
@@ -66,7 +70,7 @@ def default_qac(h, J, fix_var, C=4):
     return make_bqm(h, qa_J, fix_var)
 
 # Used to compare/benchmark the performance of the error correction
-def default_copy(h, J, fix_var, C=4):
+def default_copy(h, J, fix_var, C):
     rows, cols = np.shape(J)
     cp_J = np.zeros(C * (rows, cols))
     for i in np.arange(C):
@@ -94,7 +98,7 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time):
         th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'J_bias'), embedding, A_adj)
         th, tJ = scale_weights(th, tJ, config.strengths[iter])
 
-        qaresult = sampler.sample_ising(th, tJ, num_reads = config.nread, annealing_time=anneal_time, answer_mode='raw')
+        qaresult = sampler.sample_ising(th, tJ, num_reads=config.nread, annealing_time=anneal_time, answer_mode='raw')
         unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, embedding, bqm)
 
         for i in range(len(unembed_qaresult.record.sample)):
@@ -103,105 +107,152 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time):
 
     return qaresults
 
-# Does the fullstring stuff -> modifies results by undoing variable fixing
-def full_string(qaresults, C_i, fix_vars, fixed_dict=None):
-    '''
-    TODO: see if can speed up the process
-    '''
-    full_strings = np.zeros((len(qaresults), len(C_i)))
-    if fix_vars:
-        j = 0
-        for i in range(len(C_i)):
-            if i in fixed_dict:
-                full_strings[:, i] = 2*fixed_dict[i] - 1
-            else:
-                full_strings[:, i] = qaresults[:, j]  
-                j += 1
-    else:
-        full_strings = qaresults
+# Modifies results by undoing variable fixing
+def unfix(qaresults, h_len, fixed_dict):
+    spins = np.zeros((len(qaresults), h_len))
+    j = 0
+    for i in range(h_len):
+        if i in fixed_dict:
+            spins[:, i] = fixed_dict[i]
+        else:
+            spins[:, i] = qaresults[:, j]
+            j += 1
 
-    return full_strings
+# Modifies results by undoing variable encoding (qac method)
+#   -> uses majority rule
+def decode_qac(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
+    if fix_vars:
+        spins = unfix(qaresults, h_len, fixed_dict=fixed_dict)
+
+    true_spins = np.zeros(len(qaresults), orig_len)
+    for i in range(orig_len):
+        qubit_copies = []
+        for j in range(np.size(spins, 0) / orig_len):
+            qubit_copies.append(spins[j*orig_len])
+        true_spins[i] = np.sign(stat.mean((qubit_copies)))
+    true_spins[np.where(true_spins == 0)] = randint(-1, 1)
+
+    return true_spins
+
+# Modifies results by undoing variable encoding (copy method)
+def decode_copy(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
+    if fix_vars:
+        spins = unfix(qaresults, h_len, fixed_dict=fixed_dict)
+    
+    multi_spins = np.zeros(np.size(spins, 0) / orig_len)       # will be an exact int, not a floating point
+    for i in range(np.size(multi_spins)):
+        multi_spins[i] = spins[:, i*orig_len : (i+1)*orig_len]
+
+    return multi_spins
 
 # Derives the energies obtained from the annealing
-def en_energy(s, sigma, qaresults, C_i, C_ij, mu):
+def energies(spins, sigma, qaresults, C_i, C_ij, mu):
     '''
-    TODO: see if can speed up the process with numpy functions
+        TODO: see if can speed up the process with numpy functions
     '''
     en_energies = np.zeros(len(qaresults))
-    s[np.where(s > 1)] = 1.0
-    s[np.where(s < -1)] = -1.0
-    bits = len(s[0])
+    spins[np.where(spins > 1)] = 1.0
+    spins[np.where(spins < -1)] = -1.0
+    bits = len(spins[0])
     for i in range(bits):
-        en_energies += 2*s[:, i]*(-sigma*C_i[i])
+        en_energies += 2*spins[:, i]*(-sigma*C_i[i])
         for j in range(bits):
             if j > i:
-                en_energies += 2*s[:, i]*s[:, j]*pow(sigma, 2)*C_ij[i][j]
-            en_energies += 2*s[:, i]*sigma*C_ij[i][j] * mu[j]
+                en_energies += 2*spins[:, i]*spins[:, j]*pow(sigma, 2)*C_ij[i][j]
+            en_energies += 2*spins[:, i]*sigma*C_ij[i][j] * mu[j]
 
     return en_energies
 
-# Picks out the unique energies out of the ones derived from en_energy
-def unique_energy(en_energies, config, iter):
+# Derives the energies obtained from the annealing (qac method)
+#   -> bc majority vote happens earlier, qac has the same structure as non-qac
+def energies_qac(truespins, sigma, qaresults, C_i, C_ij, mu):
+    return energies(truespins, sigma, qaresults, C_i, C_ij, mu)
+
+# Derives the energies obtained from the annealing (copy method)
+def energies_copy(multi_spins, sigma, qaresults, C_i, C_ij, mu):
+    multi_energies = np.zeros(np.size(multi_spins, 0))
+    for i in range(np.size(multi_spins, 0)):
+        multi_energies[i] = energies(multi_spins[i], sigma, qaresults, C_i, C_ij, mu)
+
+    return multi_energies
+
+# Picks out the unique energies out of the ones derived from energies
+def unique_energies(en_energies, energy_fraction, max_state):
     '''
-    TODO: see if can speed up the process with numpy functions
+        TODO: see if can speed up the process with numpy functions
     '''
     unique_energies, unique_indices = np.unique(en_energies, return_index=True)
     ground_energy = np.amin(unique_energies)
     if ground_energy < 0:
-        threshold_energy = (1 - config.energy_fractions[iter]) * ground_energy
+        threshold_energy = (1 - energy_fraction) * ground_energy
     else:
-        threshold_energy = (1 + config.energy_fractions[iter]) * ground_energy
+        threshold_energy = (1 + energy_fraction) * ground_energy
     lowest = np.where(unique_energies < threshold_energy)
     unique_indices = unique_indices[lowest]
-    if len(unique_indices) > config.max_states[iter]:
-        sorted_indices = np.argsort(en_energies[unique_indices])[-config.max_states[iter]:]
+    if len(unique_indices) > max_state:
+        sorted_indices = np.argsort(en_energies[unique_indices])[-max_state:]
         unique_indices = unique_indices[sorted_indices]
     
     return unique_indices
 
-def anneal(config, iter, C_i, C_ij, mu, sigma, A_adj, A, sampler, anneal_time=5):
+# Picks out the unique energies out of the ones derived from energies (qac method)
+#   -> bc majority vote happens earlier, qac has the same structure as non-qac
+def uniques_qac(en_energies, energy_fractions, max_states):
+    return unique_energies(en_energies, energy_fractions, max_states)
+
+# Picks out the unique energies out of the ones derived from energies (copy method)
+def uniques_copy(en_energies, energy_fractions, max_states):
+    '''
+        TODO: write in a similar way as energies_copy
+    '''
+    pass
+
+def anneal(config, iter, env, mu, anneal_time=5):
     ''' Controls the annealing and energy selection process.
 
-        TODO: move sigma to config?; change C_i and C_ij to env; change param ordering in function call;
-            remove A_adj and A b/c both under sampler
+        TODO:
 
         Called from train() multiple times. Each call to anneal performs a training step
         on the D-Wave hardware.
 
         Parameters:
-        - C_i          The intermediate form of your input data that defines the graph nodes.
-        - C_ij         The intermediate form of your input data that defines the graph edges.
-        - mu           Vector of expected values of qubit spins.
-        - sigma        The training rate in range [0..1]
         - config       Configuration struct (hold many useful config params)
         - iter         Declares the current iteration within the training method.
+        - mu           Vector of expected values of qubit spins.
                        This is needed because some configuration parameters are per-iteration arrays.
-        - A_adj        The adjacency <something> of the annealer.
-        - A            The networkx graph of the annealer.
-        - sampler      The connection to D-Wave.
+        - env          The TrainEnv variable that holds the environment (data) used for training.
         - anneal_time  How long the annealing occurs. The longer you anneal, the better the
                        result. But the longer you anneal, the higher the chance for decoherence
                        (which yields garbage results). Units = microseconds.
     '''
-    prune_vars = config.prune_vars
-    cutoff = config.cutoff
-    encode_vars = config.encode_vars
-    fix_vars = config.fix_vars
-
-    h, J = make_h_J(C_i, C_ij, mu, sigma)
-    if not prune_vars is None:
-        J = prune_vars(J, cutoff)
-    if encode_vars is None:
-        bqm, bqm_nx, fixed_dict = make_bqm(h, J, fix_vars)
+    h, J = make_h_J(env.C_i, env.C_ij, mu, pow(config.zoom_factor, iter))
+    if config.prune_vars is not None:
+        J = config.prune_vars(J, config.cutoff)
+    if config.encode_vars is None:
+        bqm, bqm_nx, fixed_dict = make_bqm(h, J, config.fix_vars)
     else:
         orig_len = np.size(h)
-        bqm, bqm_nx, fixed_dict = encode_vars(h, J, fix_vars)
+        bqm, bqm_nx, fixed_dict = config.encode_vars(h, J, config.fix_vars, config.encoding_depth)
 
-    qaresults = dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time)
+    qaresults = dwave_connect(config, iter, env.sampler, bqm, bqm_nx, anneal_time)
 
-    full_strings = full_string(qaresults, C_i, fix_vars, fixed_dict=fixed_dict)
-    en_energies = en_energy(full_strings, sigma, qaresults, C_i, C_ij, mu)
-    unique_indices = unique_energy(en_energies, config, iter)
-    final_answers = full_strings[unique_indices]
+    if config.encode_vars is None and config.fix_vars is not None:
+        spins = unfix(qaresults, np.size(h), fixed_dict=fixed_dict)
+    elif config.encode_vars is not None:
+        spins = config.decode_vars(qaresults, np.size(h), orig_len, config.fix_vars, fixed_dict=fixed_dict)
+        en_energies = config.encoded_energies(spins, pow(config.zoom_factor, iter), qaresults, env.C_i, env.C_ij, mu)
+        unique_indices = config.encoded_uniques(en_energies, config.energy_fractions[iter], config.max_states[iter])
+
+        final_answers = []
+        for i in range(np.size(spins, 0)):
+            final_answers[i] = spins[i][unique_indices]
+
+        return final_answers
+    else:
+        spins = qaresults
+
+    en_energies = energies(spins, pow(config.zoom_factor, iter), qaresults, env.C_i, env.C_ij, mu)
+    unique_indices = unique_energies(en_energies, config.energy_fractions[iter], config.max_states[iter])    
+    final_answers = spins[unique_indices]
     
     return final_answers

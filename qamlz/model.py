@@ -1,11 +1,6 @@
 import datetime
 
-# import dimod
-# import dwave as dw
-# import minorminer
-# import networkx as nx
 import numpy as np
-# import sklearn as sk
 
 from sklearn.metrics import accuracy_score
 
@@ -29,12 +24,17 @@ class ModelConfig:
 
         self.fix_vars = True
         self.prune_vars = anneal.default_prune
-        self.default_cutoff = 95
+        self.cutoff = 95
         self.encode_vars = anneal.default_qac
+        self.encoding_depth = 3      # from nested qac paper
+        self.decode_vars = anneal.decode_qac
+        self.encoded_energies = anneal.energies_qac
+        self.encoded_uniques = anneal.uniques_qac
 
 class Model:
     '''
-        TODO: change so env is passed and sampler is in env
+        TODO: figure out how to save mus arrays, and ultimately mus files; add in validation data step
+            and finish results dict
     '''
     def __init__(self, config, env):
         # add in hyperparameters in ModelConfig
@@ -46,37 +46,33 @@ class Model:
         self.mus_dict = {}
 
     def train(self, env):
-        C_i, C_ij = env.data_preprocess(self.config.fidelity_offset, self.config.fidelity)
-        A_adj, A = self.sampler.adjacency, self.sampler.to_networkx_graph()
-        mus = [np.zeros(np.size(C_i))]
+        mus = [np.zeros(np.size(env.C_i))]
         train_size = np.shape(env.X_train)[0]
 
         for i in range(self.config.n_iterations):
-            sigma = pow(self.config.zoom_factor, i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal(C_i, C_ij, mu, sigma, self.config, i, A_adj, A, self.sampler)
+                excited_states = anneal(self.config, i, env, mu)
                 for excited_state in excited_states:
-                    new_sigma = sigma * self.config.zoom_factor
-                    new_mu = mu + (sigma * excited_state)
-                    new_energy = total_hamiltonian(new_mu, new_sigma, C_i, C_ij) / (train_size - 1)
+                    new_sigma = pow(self.config.zoom_factor, i) * self.config.zoom_factor
+                    new_mu = mu + (pow(self.config.zoom_factor, i) * excited_state)
+                    new_energy = total_hamiltonian(new_mu, new_sigma, env.C_i, env.C_ij) / (train_size - 1)
                     flips = np.ones(np.size(excited_state))
-                    for a in range(len(excited_state)):
+                    for qubit in range(len(excited_state)):
                         temp_s = np.copy(excited_state)
-                        temp_s[a] = 0
-                        old_energy = total_hamiltonian(mu, temp_s, new_sigma, C_i, C_ij) / (train_size - 1)
+                        temp_s[qubit] = 0
+                        old_energy = total_hamiltonian(mu, temp_s, new_sigma, env.C_i, env.C_ij) / (train_size - 1)
                         energy_diff = new_energy - old_energy
                         if energy_diff > 0:
                             flip_prob = self.config.flip_probs[i]
                             flip = np.random.choice([1, self.config.flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
-                            flips[a] = flip
+                            flips[qubit] = flip
                         else:
                             flip_prob = self.config.flip_others_probs[i]
                             flip = np.random.choice([1, self.config.flip_state], size=1, p=[1-flip_prob, flip_prob])[0]
-                            flips[a] = flip
+                            flips[qubit] = flip
                     flipped_s = excited_state * flips
-                    new_mus.append(mu + flipped_s*sigma*self.config.zoom_factor)
-                sigma *= self.config.zoom_factor
+                    new_mus.append(mu + flipped_s*pow(self.config.zoom_factor, i)*self.config.zoom_factor)
                 mus = new_mus
                 
                 mus_filename = 'mus%05d_iter%d-%s.npy' % (train_size, i, datetime.datetime.now().strftime('%Y-%m-%d__%H-%M-%S'))

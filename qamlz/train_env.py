@@ -1,11 +1,6 @@
 import time
 
-# import dimod
-# import dwave as dw
-# import minorminer
-# import networkx as nx
 import numpy as np
-# import sklearn as sk
 
 from dwave.system.samplers import DWaveSampler
 
@@ -19,8 +14,11 @@ class TrainEnv:
     def __init__(self, X_train, y_train, endpoint_url, account_token, X_val=None, y_val=None, fidelity=7):
         self.X_train = X_train
         self.y_train = y_train
-        self.X_val = X_val
-        self.y_val = y_val
+        if X_val is None:
+            self.create_val_data()
+        else:
+            self.X_val = X_val
+            self.y_val = y_val
         
         self.fidelity = fidelity
         self.fidelity_offset = 0.0225 / fidelity
@@ -41,17 +39,12 @@ class TrainEnv:
                 time.sleep(10)
                 cant_connect = True
 
-    # Splits training data into train and val 
-    # -> val allows hyperparameter adjustment
-    def sklearn_data_wrapper(self, sk_model):
-        X_tra, X_val = [], []
-        y_tra, y_val = [], []
-        for train_indices, val_indices in sk_model.split(self.X_train, self.y_train):
-            X_tra.append(self.X_train[train_indices]), X_val.append(self.X_train[val_indices])
-            y_tra.append(self.y_train[train_indices]), y_val.append(self.y_train[val_indices])
-        
-        self.X_train, self.X_val = np.array(X_tra), np.array(X_val)
-        self.y_train, self.y_val = np.array(y_tra), np.array(y_val)
+    def create_val_data(self):
+        dummy_xt, dummy_xv = np.split(self.X_train, [int(8*np.size(self.X_train, 0)/10)], 0)
+        dummy_yt, dummy_yv = np.split(self.y_train, [int(8*np.size(self.X_train)/10)])
+
+        self.X_train, self.X_val = np.array(list(dummy_xt)), np.array(list(dummy_xv))
+        self.y_train, self.y_val = np.array(list(dummy_yt)), np.array(list(dummy_yv))
 
     def data_preprocess(self):
         """
