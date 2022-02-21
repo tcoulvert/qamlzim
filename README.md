@@ -25,13 +25,13 @@ Special thanks to everyone who helped me develop this module:
 import qamlz
 
 # Generate the Environment (Data) for the Model
-env = qamlz.TrainEnv(X_train, y_train, endpoint_url, account_token, [X_val, y_val, fidelity])
+env = qamlz.TrainEnv(X_train, y_train, endpoint_url, account_token)
 
 # Generate the Config (Hyperparameters) for the Model
 config = qamlz.ModelConfig()
 
-# Generate the Model and Begin Training
-model = qamlz.ModelConfig(config, env)
+# Create the Model and begin training
+model = qamlz.Model(config, env)
 model.train()
 ```
 
