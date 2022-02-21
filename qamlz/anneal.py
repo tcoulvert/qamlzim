@@ -5,8 +5,6 @@ import networkx as nx
 import numpy as np
 import statistics as stat
 
-from random import randint
-
 # Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(mu, sigma, C_i, C_ij):
     ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
@@ -109,7 +107,7 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, A_adj, A, anneal_time):
 
 # Modifies results by undoing variable fixing
 def unfix(qaresults, h_len, fixed_dict):
-    spins = np.zeros((len(qaresults), h_len))
+    spins = np.zeros((np.size(qaresults, 0), h_len))
     j = 0
     for i in range(h_len):
         if i in fixed_dict:
@@ -118,19 +116,21 @@ def unfix(qaresults, h_len, fixed_dict):
             spins[:, i] = qaresults[:, j]
             j += 1
 
+    return spins
+
 # Modifies results by undoing variable encoding (qac method)
-#   -> uses majority rule
+#   -> uses majority voting
 def decode_qac(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
     if fix_vars:
         spins = unfix(qaresults, h_len, fixed_dict=fixed_dict)
 
-    true_spins = np.zeros(len(qaresults), orig_len)
+    true_spins = np.zeros(np.size(qaresults, 0), orig_len)
     for i in range(orig_len):
         qubit_copies = []
         for j in range(np.size(spins, 0) / orig_len):
             qubit_copies.append(spins[j*orig_len])
         true_spins[i] = np.sign(stat.mean((qubit_copies)))
-    true_spins[np.where(true_spins == 0)] = randint(-1, 1)
+    true_spins[np.where(true_spins == 0)] = np.random.choice([-1, 1])
 
     return true_spins
 
@@ -148,18 +148,14 @@ def decode_copy(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
 # Derives the energies obtained from the annealing
 def energies(spins, sigma, qaresults, C_i, C_ij, mu):
     '''
-        TODO: see if can speed up the process with numpy functions
+        TODO:
     '''
-    en_energies = np.zeros(len(qaresults))
-    spins[np.where(spins > 1)] = 1.0
-    spins[np.where(spins < -1)] = -1.0
-    bits = len(spins[0])
-    for i in range(bits):
-        en_energies += 2*spins[:, i]*(-sigma*C_i[i])
-        for j in range(bits):
-            if j > i:
-                en_energies += 2*spins[:, i]*spins[:, j]*pow(sigma, 2)*C_ij[i][j]
-            en_energies += 2*spins[:, i]*sigma*C_ij[i][j] * mu[j]
+    en_energies = np.zeros(np.size(qaresults, 0))
+    np.sign(spins, spins)
+
+    en_energies = -2 * np.einsum('ij, jk', spins, C_i) * sigma
+    en_energies += 2 * np.einsum('ij, jk', np.einsum('ij, jk', spins, np.triu(C_ij, k=1)), spins[0][:]) * pow(sigma, 2)
+    en_energies += 2 * np.einsum('ij, jk', np.einsum('ij, jk', spins, C_ij), mu)
 
     return en_energies
 
@@ -179,7 +175,7 @@ def energies_copy(multi_spins, sigma, qaresults, C_i, C_ij, mu):
 # Picks out the unique energies out of the ones derived from energies
 def unique_energies(en_energies, energy_fraction, max_state):
     '''
-        TODO: see if can speed up the process with numpy functions
+        TODO:
     '''
     unique_energies, unique_indices = np.unique(en_energies, return_index=True)
     ground_energy = np.amin(unique_energies)
@@ -189,8 +185,8 @@ def unique_energies(en_energies, energy_fraction, max_state):
         threshold_energy = (1 + energy_fraction) * ground_energy
     lowest = np.where(unique_energies < threshold_energy)
     unique_indices = unique_indices[lowest]
-    if len(unique_indices) > max_state:
-        sorted_indices = np.argsort(en_energies[unique_indices])[-max_state:]
+    if np.size(unique_indices, 0) > max_state:
+        sorted_indices = np.argsort(en_energies[unique_indices])[-max_state :]
         unique_indices = unique_indices[sorted_indices]
     
     return unique_indices
@@ -201,11 +197,15 @@ def uniques_qac(en_energies, energy_fractions, max_states):
     return unique_energies(en_energies, energy_fractions, max_states)
 
 # Picks out the unique energies out of the ones derived from energies (copy method)
-def uniques_copy(en_energies, energy_fractions, max_states):
+def uniques_copy(multi_energies, energy_fractions, max_states):
     '''
-        TODO: write in a similar way as energies_copy
+        TODO:
     '''
-    pass
+    multi_uniques = np.zeros(np.size(multi_energies, 0))
+    for i in range(np.size(multi_energies, 0)):
+        multi_uniques[i] = energies(multi_energies[i], energy_fractions, max_states)
+
+    return multi_uniques
 
 def anneal(config, iter, env, mu, anneal_time=5):
     ''' Controls the annealing and energy selection process.
@@ -243,16 +243,19 @@ def anneal(config, iter, env, mu, anneal_time=5):
         en_energies = config.encoded_energies(spins, pow(config.zoom_factor, iter), qaresults, env.C_i, env.C_ij, mu)
         unique_indices = config.encoded_uniques(en_energies, config.energy_fractions[iter], config.max_states[iter])
 
-        final_answers = []
-        for i in range(np.size(spins, 0)):
-            final_answers[i] = spins[i][unique_indices]
-
-        return final_answers
+        if len(np.shape(spins)) == 2:
+            excited_states_arr = [spins[unique_indices]]
+        elif len(np.shape(spins)) == 3:
+            excited_states_arr = []
+            for i in range(np.size(spins, 0)):
+                excited_states_arr[i] = spins[i][unique_indices]
+        
+        return excited_states_arr
     else:
         spins = qaresults
 
     en_energies = energies(spins, pow(config.zoom_factor, iter), qaresults, env.C_i, env.C_ij, mu)
     unique_indices = unique_energies(en_energies, config.energy_fractions[iter], config.max_states[iter])    
-    final_answers = spins[unique_indices]
+    excited_states_arr = [spins[unique_indices]]
     
-    return final_answers
+    return excited_states_arr
