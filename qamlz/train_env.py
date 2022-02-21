@@ -1,16 +1,13 @@
 import time
 
-import dimod
-import dwave as dw
-import minorminer
-import networkx as nx
+# import dimod
+# import dwave as dw
+# import minorminer
+# import networkx as nx
 import numpy as np
-import sklearn as sk
+# import sklearn as sk
 
 from dwave.system.samplers import DWaveSampler
-
-import anneal
-import model
 
 # Numpy arrays should be row-major for best performance
 

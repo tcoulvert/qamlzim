@@ -3,10 +3,7 @@ import dwave as dw
 import minorminer
 import networkx as nx
 import numpy as np
-import sklearn as sk
-
-import train_env
-import model
+# import sklearn as sk
 
 # Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(mu, sigma, C_i, C_ij):

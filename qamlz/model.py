@@ -1,16 +1,15 @@
 import datetime
 
-import dimod
-import dwave as dw
-import minorminer
-import networkx as nx
+# import dimod
+# import dwave as dw
+# import minorminer
+# import networkx as nx
 import numpy as np
-import sklearn as sk
+# import sklearn as sk
 
 from sklearn.metrics import accuracy_score
 
-import anneal
-import train_env
+from .anneal import anneal, total_hamiltonian
 
 class ModelConfig:
     def __init__(self, n_iterations=10, zoom_factor=0.5):
@@ -56,16 +55,16 @@ class Model:
             sigma = pow(self.config.zoom_factor, i)
             new_mus = []
             for mu in mus:
-                excited_states = anneal.anneal(C_i, C_ij, mu, sigma, self.config, i, A_adj, A, self.sampler)
+                excited_states = anneal(C_i, C_ij, mu, sigma, self.config, i, A_adj, A, self.sampler)
                 for excited_state in excited_states:
                     new_sigma = sigma * self.config.zoom_factor
                     new_mu = mu + (sigma * excited_state)
-                    new_energy = anneal.total_hamiltonian(new_mu, new_sigma, C_i, C_ij) / (train_size - 1)
+                    new_energy = total_hamiltonian(new_mu, new_sigma, C_i, C_ij) / (train_size - 1)
                     flips = np.ones(np.size(excited_state))
                     for a in range(len(excited_state)):
                         temp_s = np.copy(excited_state)
                         temp_s[a] = 0
-                        old_energy = anneal.total_hamiltonian(mu, temp_s, new_sigma, C_i, C_ij) / (train_size - 1)
+                        old_energy = total_hamiltonian(mu, temp_s, new_sigma, C_i, C_ij) / (train_size - 1)
                         energy_diff = new_energy - old_energy
                         if energy_diff > 0:
                             flip_prob = self.config.flip_probs[i]
