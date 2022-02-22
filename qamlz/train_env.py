@@ -41,7 +41,7 @@ class TrainEnv:
 
     def create_val_data(self):
         dummy_xt, dummy_xv = np.split(self.X_train, [int(8*np.size(self.X_train, 0)/10)], 0)
-        dummy_yt, dummy_yv = np.split(self.y_train, [int(8*np.size(self.X_train)/10)])
+        dummy_yt, dummy_yv = np.split(self.y_train, [int(8*np.size(self.y_train)/10)])
 
         self.X_train, self.X_val = np.array(list(dummy_xt)), np.array(list(dummy_xv))
         self.y_train, self.y_val = np.array(list(dummy_yt)), np.array(list(dummy_yv))
@@ -68,7 +68,7 @@ class TrainEnv:
         c_i = np.sign(np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * self.fidelity)
         c_i = np.reshape(c_i, (m_events, n_params*self.fidelity))
 
-        C_i = np.dot(self.y_train, c_i)
+        C_i = np.einsum('ij, jk', c_i, self.y_train)
         C_ij = np.einsum('ij,kj', c_i, c_i)
 
         self.C_i, self.C_ij = C_i, C_ij
