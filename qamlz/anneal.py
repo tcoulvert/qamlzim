@@ -28,7 +28,7 @@ def make_h_J(C_i, C_ij, mu, sigma):
 # -> should hold a couple simple pruning methods
 def default_prune(J, cutoff_percentile):
     rows, cols = np.shape(J)
-    sign_J = np.sign(J)
+    sign_J = np.ndarray.flatten(np.sign(J))
     J = np.abs(np.ndarray.flatten(J))
     np.where(J > cutoff_percentile, J, 0)
 
