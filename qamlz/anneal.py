@@ -32,7 +32,7 @@ def default_prune(J, cutoff_percentile):
     J = np.abs(np.ndarray.flatten(J))
     np.where(J > cutoff_percentile, J, 0)
 
-    return np.broadcast_to(J * sign_J, (rows, cols))
+    return np.reshape(J * sign_J, (rows, cols))
 
 # makes a dwave bqm and corresponding networkx graph
 def make_bqm(h, J, fix_var):
