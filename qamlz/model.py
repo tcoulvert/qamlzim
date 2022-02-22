@@ -69,21 +69,21 @@ class Model:
         return (mu + flipped_s*new_sigma)
             
 
-    def train(self, env):
-        mus = [np.zeros(np.size(env.C_i))]
-        train_size = np.shape(env.X_train)[0]
+    def train(self):
+        mus = [np.zeros(np.size(self.env.C_i))]
+        train_size = np.shape(self.env.X_train)[0]
 
         for i in range(self.config.n_iterations):
             new_mus = []
             for mu in mus:
-                excited_states_arr = anneal(self.config, i, env, mu)
+                excited_states_arr = anneal(self.config, i, self.env, mu)
                 for j in range(np.size(excited_states_arr, 0)):
-                    new_mus.append([self.pick_excited_states(self.config, env, i, excited_states_arr[j], mu, train_size)])
+                    new_mus.append([self.pick_excited_states(self.config, self.env, i, excited_states_arr[j], mu, train_size)])
             accuracies = np.zeros(len(new_mus))
             for j in range(len(new_mus)):
                 avg_arr_val =[]
                 for mu in new_mus[j]:
-                    avg_arr_val.append(accuracy_score(env.y_val, self.evaluate(env.X_val, mu)))
+                    avg_arr_val.append(accuracy_score(self.env.y_val, self.evaluate(self.env.X_val, mu)))
                 np.append(accuracies, np.mean(np.array(avg_arr_val)))
             mus = new_mus[np.where(np.max(accuracies))]
             mus_filename = 'mus%05d_iter%d_run%d-%s.npy' % (train_size, i, j, self.start_time)
