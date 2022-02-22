@@ -9,8 +9,10 @@ import statistics as stat
 def total_hamiltonian(mu, sigma, C_i, C_ij):
     ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
         Dot products of upper triangle
+
+        TODO: Check indecies
     '''
-    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu))) * sigma
+    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu.T))) * sigma
     ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
     
     return ham
@@ -153,9 +155,9 @@ def energies(spins, sigma, qaresults, C_i, C_ij, mu):
     en_energies = np.zeros(np.size(qaresults, 0))
     np.sign(spins, spins)
 
-    en_energies = -2 * np.einsum('ij, jk', spins, C_i) * sigma
-    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, np.triu(C_ij, k=1)), spins[0][:]) * pow(sigma, 2)
-    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, C_ij), mu)
+    en_energies = -2 * np.einsum('ij, j', spins, C_i.T) * sigma
+    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, np.triu(C_ij, k=1)), spins[0][:].T) * pow(sigma, 2)
+    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, C_ij), mu.T)
 
     return en_energies
 
