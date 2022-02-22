@@ -10,9 +10,9 @@ def total_hamiltonian(mu, sigma, C_i, C_ij):
     ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
         Dot products of upper triangle
 
-        TODO: Check indecies
+        TODO: Check indecies; maybe add .T
     '''
-    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu.T))) * sigma
+    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu))) * sigma
     ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
     
     return ham
@@ -150,14 +150,14 @@ def decode_copy(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
 # Derives the energies obtained from the annealing
 def energies(spins, sigma, qaresults, C_i, C_ij, mu):
     '''
-        TODO: check ordering of einsum indecies
+        TODO: check ordering of einsum indecies; maybe add .T
     '''
     en_energies = np.zeros(np.size(qaresults, 0))
     np.sign(spins, spins)
 
-    en_energies = -2 * np.einsum('ij, j', spins, C_i.T) * sigma
-    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, np.triu(C_ij, k=1)), spins[0][:].T) * pow(sigma, 2)
-    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, C_ij), mu.T)
+    en_energies = -2 * np.einsum('ij, j', spins, C_i) * sigma
+    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, np.triu(C_ij, k=1)), spins[0][:]) * pow(sigma, 2)
+    en_energies += 2 * np.einsum('ij, j', np.einsum('ij, jk', spins, C_ij), mu)
 
     return en_energies
 
