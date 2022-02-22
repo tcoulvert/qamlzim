@@ -148,7 +148,7 @@ def decode_copy(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
 # Derives the energies obtained from the annealing
 def energies(spins, sigma, qaresults, C_i, C_ij, mu):
     '''
-        TODO:
+        TODO: check ordering of einsum indecies
     '''
     en_energies = np.zeros(np.size(qaresults, 0))
     np.sign(spins, spins)

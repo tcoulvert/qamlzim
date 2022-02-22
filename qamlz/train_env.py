@@ -68,7 +68,7 @@ class TrainEnv:
         c_i = np.sign(np.ndarray.flatten(c_i, order='C') - offset_array) / (n_params * self.fidelity)
         c_i = np.reshape(c_i, (m_events, n_params*self.fidelity))
 
-        C_i = np.einsum('ij, j', c_i, self.y_train)
+        C_i = np.einsum('i, ij', self.y_train, c_i)
         C_ij = np.einsum('ij,kj', c_i, c_i)
 
         self.C_i, self.C_ij = C_i, C_ij
