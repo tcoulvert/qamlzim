@@ -11,7 +11,7 @@ class TrainEnv:
     # -> clear to both user and code what each array is
     # X_train, y_train should be formatted like scikit-learn data arrays are
     # -> X_train is the train data, y_train is the train labels
-    def __init__(self, X_train, y_train, endpoint_url, account_token, name='Advantage_system4.1', X_val=None, y_val=None, fidelity=7):
+    def __init__(self, X_train, y_train, endpoint_url, account_token, X_val=None, y_val=None, fidelity=7):
         self.X_train = X_train
         self.y_train = y_train
         if X_val is None:
@@ -27,7 +27,7 @@ class TrainEnv:
         self.C_ij = None
         self.data_preprocess()
 
-        self.sampler = DWaveSampler(endpoint=endpoint_url, token=account_token, solver=name)
+        self.sampler = DWaveSampler(endpoint=endpoint_url, token=account_token, solver=dict(topology__type='pegasus'))
 
     def create_val_data(self):
         dummy_xt, dummy_xv = np.split(self.X_train, [int(8*np.size(self.X_train, 0)/10)], 0)
