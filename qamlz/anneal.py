@@ -40,7 +40,7 @@ def make_bqm(h, J, fix_var):
     attr_dict, h_list = {}, []
     for i in range(np.size(h)):
         attr_dict['h_bias'] = h[i]
-        h_list[i] = (i, attr_dict['h_bias'])
+        h_list.append((i, attr_dict['h_bias']))
     h_dict = np.column_stack((np.arange(np.size(h)), attr_dict))
     bqm_nx.add_nodes_from(h_dict)
     
