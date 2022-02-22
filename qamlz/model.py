@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 from .anneal import anneal, total_hamiltonian
+from .anneal import default_prune, default_qac, decode_qac, energies_qac, uniques_qac
 
 class ModelConfig:
     def __init__(self, n_iterations=10, zoom_factor=0.5):
@@ -22,13 +23,13 @@ class ModelConfig:
         self.nread = 200
 
         self.fix_vars = True
-        self.prune_vars = anneal.default_prune
+        self.prune_vars = default_prune
         self.cutoff = 95
-        self.encode_vars = anneal.default_qac
+        self.encode_vars = default_qac
         self.encoding_depth = 3      # from nested qac paper
-        self.decode_vars = anneal.decode_qac
-        self.encoded_energies = anneal.energies_qac
-        self.encoded_uniques = anneal.uniques_qac
+        self.decode_vars = decode_qac
+        self.encoded_energies = energies_qac
+        self.encoded_uniques = uniques_qac
 
 class Model:
     '''
