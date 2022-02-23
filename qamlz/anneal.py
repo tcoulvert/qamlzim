@@ -5,6 +5,9 @@ import networkx as nx
 import numpy as np
 import statistics as stat
 
+import dwave.preprocessing.lower_bounds as dwplb
+import dwave.embedding as dwe
+
 # Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(mu, sigma, C_i, C_ij):
     ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
@@ -46,7 +49,9 @@ def make_bqm(h, J, fix_var):
     bqm = dimod.from_networkx_graph(bqm_nx, vartype='SPIN', node_attribute_name='h_bias', edge_attribute_name='weight')
     fixed_dict = None
     if fix_var:
-        lowerE, fixed_dict = dw.preprocessing.roof_duality(bqm)        # Consider using the more aggressive form of fixing
+        lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)        # Consider using the more aggressive form of fixing
+        if fixed_dict == {}:
+            lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
 
@@ -93,12 +98,13 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     qaresults = np.zeros((config.ngauges[iter]*config.nread, num_nodes))
     for g in range(config.ngauges[iter]):
         a = np.sign(np.random.rand(num_nodes) - 0.5)
-        embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
-        th, tJ = dw.embedding.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'weight'), embedding, sampler.adjacency)
+        if config.embedding is None:
+            config.embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
+        th, tJ = dwe.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'weight'), config.embedding, sampler.adjacency)
         th, tJ = scale_weights(th, tJ, config.strengths[iter])
 
         qaresult = sampler.sample_ising(th, tJ, num_reads=config.nread, annealing_time=anneal_time, answer_mode='raw')
-        unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, embedding, bqm)
+        unembed_qaresult = dw.embedding.unembed_sampleset(qaresult, config.embedding, bqm)
 
         for i in range(len(unembed_qaresult.record.sample)):
             unembed_qaresult.record.sample[i, :] = unembed_qaresult.record.sample[i, :] * a
@@ -208,7 +214,7 @@ def uniques_copy(multi_energies, energy_fractions, max_states):
 
     return multi_uniques
 
-def anneal(config, iter, env, mu, anneal_time=5):
+def anneal(config, iter, env, mu):
     ''' Controls the annealing and energy selection process.
 
         TODO:
@@ -235,7 +241,7 @@ def anneal(config, iter, env, mu, anneal_time=5):
         orig_len = np.size(h)
         bqm, bqm_nx, fixed_dict = config.encode_vars(h, J, config.fix_vars, config.encoding_depth)
 
-    qaresults = dwave_connect(config, iter, env.sampler, bqm, bqm_nx, anneal_time)
+    qaresults = dwave_connect(config, iter, env.sampler, bqm, bqm_nx, config.anneal_time)
 
     if config.encode_vars is None and config.fix_vars is not None:
         spins = unfix(qaresults, np.size(h), fixed_dict=fixed_dict)

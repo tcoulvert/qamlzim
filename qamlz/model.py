@@ -11,7 +11,7 @@ class ModelConfig:
     def __init__(self, n_iterations=10, zoom_factor=0.5):
         self.n_iterations = n_iterations
         self.zoom_factor = zoom_factor
-        self.fix_var = True
+        self.anneal_time = 5
         
         self.flip_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4))
         self.flip_others_probs = np.array([0.16, 0.08, 0.04, 0.02] + [0.01]*(n_iterations - 4)) / 2
@@ -21,6 +21,8 @@ class ModelConfig:
         self.ngauges = [50, 10] + [1]*(n_iterations - 2)
         self.max_states = [16, 4] + [1]*(n_iterations - 2)
         self.nread = 200
+
+        self.embedding = None
 
         self.fix_vars = True
         self.prune_vars = default_prune
@@ -71,14 +73,13 @@ class Model:
 
     def train(self):
         mus = [np.zeros(np.size(self.env.C_i))]
-        train_size = np.shape(self.env.X_train)[0]
 
         for i in range(self.config.n_iterations):
             new_mus = []
             for mu in mus:
                 excited_states_arr = anneal(self.config, i, self.env, mu)
                 for j in range(np.size(excited_states_arr, 0)):
-                    new_mus.append([self.pick_excited_states(self.config, self.env, i, excited_states_arr[j], mu, train_size)])
+                    new_mus.append([self.pick_excited_states(self.config, self.env, i, excited_states_arr[j], mu, np.shape(self.env.X_train)[0])])
             accuracies = np.zeros(len(new_mus))
             for j in range(len(new_mus)):
                 avg_arr_val =[]
@@ -86,7 +87,7 @@ class Model:
                     avg_arr_val.append(accuracy_score(self.env.y_val, self.evaluate(self.env.X_val, mu)))
                 np.append(accuracies, np.mean(np.array(avg_arr_val)))
             mus = new_mus[np.where(np.max(accuracies))]
-            mus_filename = 'mus%05d_iter%d_run%d-%s.npy' % (train_size, i, j, self.start_time)
+            mus_filename = 'mus%05d_iter%d_run%d-%s.npy' % (np.shape(self.env.X_train)[0], i, j, self.start_time)
             self.mus_dict[mus_filename] = np.array(mus)
 
     # Returns the ML algorithm's predictions
