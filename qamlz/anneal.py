@@ -49,7 +49,7 @@ def make_bqm(h, J, fix_var):
     bqm = dimod.from_networkx_graph(bqm_nx, vartype='SPIN', node_attribute_name='h_bias', edge_attribute_name='weight')
     fixed_dict = None
     if fix_var:
-        lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)        # Consider using the more aggressive form of fixing
+        lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
         if fixed_dict == {}:
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
         for i in fixed_dict.keys():
@@ -94,12 +94,13 @@ def scale_weights(th, tJ, strength):
 
 # Does the actual DWave annealing and connecting
 def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
+    '''
+        TODO: Determine if its possible to reuse the embedding from previous steps
+    '''
     num_nodes = bqm.num_variables
     qaresults = np.zeros((config.ngauges[iter]*config.nread, num_nodes))
     for g in range(config.ngauges[iter]):
         a = np.sign(np.random.rand(num_nodes) - 0.5)
-        # if config.embedding is None:
-        #     config.embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
         config.embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
         th, tJ = dwe.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'weight'), config.embedding, sampler.adjacency)
         th, tJ = scale_weights(th, tJ, config.strengths[iter])
