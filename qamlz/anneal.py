@@ -52,6 +52,7 @@ def make_bqm(h, J, fix_var):
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
         if fixed_dict == {}:
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
+        print(fixed_dict)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
 
