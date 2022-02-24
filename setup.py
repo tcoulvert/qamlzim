@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='qamlz',
-    version='0.2.2',
+    version='0.2.21',
     description='Binary Classifier trained with D-Wave\'s Quantum Annealers.',
     packages=find_packages(include=['qamlz']),
     classifiers=[

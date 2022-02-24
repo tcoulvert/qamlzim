@@ -23,6 +23,9 @@ class ModelConfig:
         self.nread = 200
 
         self.embedding = None
+        self.fixed_dict = None
+        self.same_fixed_dict_counter = 0
+        self.diff_fixed_dict_counter = 0
 
         self.fix_vars = True
         self.prune_vars = default_prune
@@ -56,7 +59,8 @@ class Model:
             for qubit in range(np.size(excited_state)):
                 temp_s = np.copy(excited_state)
                 temp_s[qubit] = 0
-                old_energy = total_hamiltonian(mu, temp_s, new_sigma, env.C_i, env.C_ij) / (train_size - 1)
+                flipped_mu = mu + (pow(config.zoom_factor, iter) * temp_s)
+                old_energy = total_hamiltonian(flipped_mu, new_sigma, env.C_i, env.C_ij) / (train_size - 1)
                 energy_diff = new_energy - old_energy
                 if energy_diff > 0:
                     flip_prob = config.flip_probs[iter]
@@ -72,14 +76,14 @@ class Model:
             
 
     def train(self):
-        mus = [np.zeros(np.size(self.env.C_i))]
+        mus = [np.ones(np.size(self.env.C_i))]
 
         for i in range(self.config.n_iterations):
             new_mus = []
             for mu in mus:
                 excited_states_arr = anneal(self.config, i, self.env, mu)
-                for j in range(np.size(excited_states_arr, 0)):
-                    new_mus.append([self.pick_excited_states(self.config, self.env, i, excited_states_arr[j], mu, np.shape(self.env.X_train)[0])])
+                for excited_states in excited_states_arr:
+                    new_mus.append([self.pick_excited_states(self.config, self.env, i, excited_states, mu, np.shape(self.env.X_train)[0])])
             accuracies = np.zeros(len(new_mus))
             for j in range(len(new_mus)):
                 avg_arr_val =[]

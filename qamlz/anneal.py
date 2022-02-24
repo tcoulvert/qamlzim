@@ -52,7 +52,6 @@ def make_bqm(h, J, fix_var):
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
         if fixed_dict == {}:
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
-        print(fixed_dict)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
 
@@ -241,6 +240,12 @@ def anneal(config, iter, env, mu):
         J = config.prune_vars(J, config.cutoff)
     if config.encode_vars is None:
         bqm, bqm_nx, fixed_dict = make_bqm(h, J, config.fix_vars)
+        if config.fixed_dict is None:
+            config.fixed_dict = fixed_dict
+        elif config.fixed_dict.keys() == fixed_dict.keys():
+            config.same_fixed_dict_counter += 1
+        else:
+            config.diff_fixed_dict_counter += 1
     else:
         orig_len = np.size(h)
         bqm, bqm_nx, fixed_dict = config.encode_vars(h, J, config.fix_vars, config.encoding_depth)
