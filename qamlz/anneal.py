@@ -102,7 +102,8 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     qaresults = np.zeros((config.ngauges[iter]*config.nread, num_nodes))
     for g in range(config.ngauges[iter]):
         a = np.sign(np.random.rand(num_nodes) - 0.5)
-        config.embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
+        if config.embedding is None:
+            config.embedding = minorminer.find_embedding(bqm_nx, sampler.to_networkx_graph())
         th, tJ = dwe.embed_ising(nx.classes.function.get_node_attributes(bqm_nx, 'h_bias'), nx.classes.function.get_edge_attributes(bqm_nx, 'weight'), config.embedding, sampler.adjacency)
         th, tJ = scale_weights(th, tJ, config.strengths[iter])
 

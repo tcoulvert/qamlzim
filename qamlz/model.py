@@ -47,7 +47,7 @@ class Model:
         self.anneal_results = {}
         self.mus_dict = {}
 
-    def pick_excited_states(config, env, iter, excited_states, mu, train_size):
+    def pick_excited_states(self, config, env, iter, excited_states, mu, train_size):
         for excited_state in excited_states:
             new_sigma = pow(config.zoom_factor, iter+1)
             new_mu = mu + (pow(config.zoom_factor, iter) * excited_state)
