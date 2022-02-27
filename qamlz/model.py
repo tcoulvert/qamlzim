@@ -4,8 +4,27 @@ import numpy as np
 
 from sklearn.metrics import accuracy_score
 
-from .anneal import anneal, total_hamiltonian
+from .anneal import anneal
 from .anneal import default_prune, default_qac, decode_qac, energies_qac, uniques_qac
+
+# Used to calculate the total hamiltonian of a certain problem
+def total_hamiltonian(mu, sigma, C_i, C_ij):
+    ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
+        Dot products of upper triangle
+
+        TODO: Check indecies; maybe add .T
+    '''
+    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu))) * sigma
+    ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
+    
+    return ham
+
+# Returns the ML algorithm's predictions
+def evaluate(X_data, weights):
+    '''
+        TODO:
+    '''
+    return np.sign(np.dot(weights, X_data))
 
 class ModelConfig:
     def __init__(self, n_iterations=10, zoom_factor=0.5):
@@ -76,6 +95,9 @@ class Model:
             
 
     def train(self):
+        '''
+            TODO: recombine weights into actual parameter classifiers
+        '''
         mus = [np.ones(np.size(self.env.C_i))]
 
         for i in range(self.config.n_iterations):
@@ -88,12 +110,9 @@ class Model:
             for j in range(len(new_mus)):
                 avg_arr_val =[]
                 for mu in new_mus[j]:
-                    avg_arr_val.append(accuracy_score(self.env.y_val, self.evaluate(self.env.X_val, mu)))
+                    avg_arr_val.append(accuracy_score(self.env.y_val, evaluate(mu, self.env.c_i)))
                 np.append(accuracies, np.mean(np.array(avg_arr_val)))
             mus = new_mus[np.where(np.max(accuracies))]
             mus_filename = 'mus%05d_iter%d_run%d-%s.npy' % (np.shape(self.env.X_train)[0], i, j, self.start_time)
             self.mus_dict[mus_filename] = np.array(mus)
 
-    # Returns the ML algorithm's predictions
-    def evaluate(self, X_data, weights):
-        return np.sign(np.dot(X_data.T, weights))

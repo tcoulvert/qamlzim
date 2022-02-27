@@ -8,18 +8,6 @@ import statistics as stat
 import dwave.preprocessing.lower_bounds as dwplb
 import dwave.embedding as dwe
 
-# Used to calculate the total hamiltonian of a certain problem
-def total_hamiltonian(mu, sigma, C_i, C_ij):
-    ''' Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
-        Dot products of upper triangle
-
-        TODO: Check indecies; maybe add .T
-    '''
-    ham = np.sum(-C_i + np.sum(np.einsum('ij, j', np.triu(C_ij, k=1), mu))) * sigma
-    ham += np.sum(np.triu(C_ij, k=1)) * pow(sigma, 2)
-    
-    return ham
-
 # Makes the h and J np arrays for use in creating the bqm and networkx graph
 def make_h_J(C_i, C_ij, mu, sigma):
     h = 2 * sigma * (np.einsum('ij, j', C_ij, mu) - C_i)
