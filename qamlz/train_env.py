@@ -19,7 +19,8 @@ class TrainEnv:
         else:
             self.X_val = X_val
             self.y_val = y_val
-        
+        self.train_size = np.shape(self.X_train)[0]
+
         self.fidelity = fidelity
         self.fidelity_offset = 0.0225 / fidelity
 
