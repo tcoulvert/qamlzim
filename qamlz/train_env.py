@@ -1,5 +1,3 @@
-import time
-
 import numpy as np
 
 from dwave.system.samplers import DWaveSampler
@@ -58,11 +56,11 @@ class TrainEnv:
 
     def data_preprocess(self):
         """
-        This duplicates the parameters 'fidelity' times. The purpose is to turn the weak classifiers
-        from outputing a single number (-1 or 1) to outputting a binary array ([-1, 1, 1,...]). The
-        use of such a change is to trick the math into allowing more nuance between a weak classifier
-        that outputs 0.1 from a weak classifier that outputs 0.9 (the weak classifier outputs are continuous)
-        -> thereby discretizing the weak classifier's decision into more pieces than binary.
+            This duplicates the parameters 'fidelity' times. The purpose is to turn the weak classifiers
+            from outputing a single number (-1 or 1) to outputting a binary array ([-1, 1, 1,...]). The
+            use of such a change is to trick the math into allowing more nuance between a weak classifier
+            that outputs 0.1 from a weak classifier that outputs 0.9 (the weak classifier outputs are continuous)
+            -> thereby discretizing the weak classifier's decision into more pieces than binary.
         """
         """
             This creates a periodic array to shift the outputs of the repeated weak classifier, so that there

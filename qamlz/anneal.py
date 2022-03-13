@@ -30,11 +30,11 @@ def default_prune(J, cutoff_percentile):
 # makes a dwave bqm and corresponding networkx graph
 def make_bqm(h, J, fix_var):
     bqm_nx = nx.from_numpy_matrix(J)
-    attr_dict, h_list = {}, []
-    for i in range(np.size(h)):
-        attr_dict["h_bias"] = h[i]
-        h_list.append((i, attr_dict["h_bias"]))
-    bqm_nx.add_nodes_from(h_list)
+    node_dict, attr_dict = {}, {}
+    for node in bqm_nx:
+        attr_dict["h_bias"] = h[node]
+        node_dict[node] = attr_dict
+    nx.set_node_attributes(bqm_nx, node_dict)
 
     bqm = dimod.from_networkx_graph(
         bqm_nx,
