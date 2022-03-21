@@ -3,6 +3,7 @@ import dwave as dw
 import minorminer
 import networkx as nx
 import numpy as np
+import os
 import statistics as stat
 
 import dwave.preprocessing.lower_bounds as dwplb
@@ -20,21 +21,48 @@ def make_h_J(C_i, C_ij, mu, sigma):
 # -> should hold a couple simple pruning methods
 def default_prune(J, cutoff_percentile):
     rows, cols = np.shape(J)
-    sign_J = np.ndarray.flatten(np.sign(J))
-    J = np.abs(np.ndarray.flatten(J))
-    np.where(J > cutoff_percentile, J, 0)
+    flat_J = np.ndarray.flatten(J)
+    sign_J = np.sign(flat_J)
+    abs_J = np.abs(flat_J)
+    cutoff_val = np.percentile(abs_J, cutoff_percentile)
+    J = np.where(abs_J > cutoff_val, abs_J, 0)
 
     return np.reshape(J * sign_J, (rows, cols))
 
 
 # makes a dwave bqm and corresponding networkx graph
 def make_bqm(h, J, fix_var):
-    bqm_nx = nx.from_numpy_matrix(J)
+    """
+    TODO: Clean up code and add in script tags for Graphs
+    """
+    bqm_nx = nx.from_numpy_array(J)
+
+    Graphs = False
+    if Graphs:
+        run = 0
+        while os.path.exists(
+            "/Users/tsievert/QAMLZ Duarte/Misc/qamlz_for_higgs/Graphs/new_bef_graph_%03d.xml"
+            % run
+        ):
+            run += 1
+        nx.write_graphml(
+            bqm_nx,
+            "/Users/tsievert/QAMLZ Duarte/Misc/qamlz_for_higgs/Graphs/new_J_graph_%03d.xml"
+            % run,
+        )
+
     node_dict, attr_dict = {}, {}
     for node in bqm_nx:
         attr_dict["h_bias"] = h[node]
         node_dict[node] = attr_dict
     nx.set_node_attributes(bqm_nx, node_dict)
+
+    if Graphs:
+        nx.write_graphml(
+            bqm_nx,
+            "/Users/tsievert/QAMLZ Duarte/Misc/qamlz_for_higgs/Graphs/new_bef_graph_%03d.xml"
+            % run,
+        )
 
     bqm = dimod.from_networkx_graph(
         bqm_nx,
@@ -45,10 +73,27 @@ def make_bqm(h, J, fix_var):
     fixed_dict = None
     if fix_var:
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
-        if fixed_dict == {}:
-            lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
+        # if fixed_dict == {}:
+        #     lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
+            bqm_nx.remove_node(i)
+            bqm_nx.add_node(i, h_bias=fixed_dict[i])
+
+    print(
+        "nx node num = %d \ndw node num = %d"
+        % (bqm_nx.number_of_nodes(), bqm.num_variables)
+    )
+    print(
+        "nx edge num = %d \ndw edge num = %d"
+        % (bqm_nx.number_of_edges(), bqm.num_interactions)
+    )
+    if Graphs:
+        nx.write_graphml(
+            bqm_nx,
+            "/Users/tsievert/QAMLZ Duarte/Misc/qamlz_for_higgs/Graphs/new_aft_graph_%03d.xml"
+            % run,
+        )
 
     return bqm, bqm_nx, fixed_dict
 
@@ -58,7 +103,7 @@ def make_bqm(h, J, fix_var):
 def default_qac(h, J, fix_var, C):
     rows, cols = np.shape(J)
     con_J = J + J.T + np.max(np.ndarray.flatten(J)) * np.eye(rows, cols)
-    qa_J = np.zeros(C * (rows, cols))
+    qa_J = np.zeros((C * rows, C * cols))
     for i in np.arange(C):
         for j in np.arange(i, C):
             if i == j:
@@ -73,7 +118,7 @@ def default_qac(h, J, fix_var, C):
 # Used to compare/benchmark the performance of the error correction
 def default_copy(h, J, fix_var, C):
     rows, cols = np.shape(J)
-    cp_J = np.zeros(C * (rows, cols))
+    cp_J = np.zeros((C * rows, C * cols))
     for i in np.arange(C):
         cp_J[i * rows : (i + 1) * rows, i * cols : (i + 1) * cols] = J
     h = np.repeat(h, C)
@@ -84,9 +129,9 @@ def default_copy(h, J, fix_var, C):
 # adjust weights
 def scale_weights(th, tJ, strength):
     for k in list(th.keys()):
-        th[k] /= strength
+        th[k] *= strength
     for k in list(tJ.keys()):
-        tJ[k] /= strength
+        tJ[k] *= strength
 
     return th, tJ
 
@@ -96,14 +141,16 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     """
     TODO: Determine if its possible to reuse the embedding from previous steps
     """
-    num_nodes = bqm.num_variables
-    qaresults = np.zeros((config.ngauges[iter] * config.nread, num_nodes))
+    qaresults = np.zeros((config.ngauges[iter] * config.nread, bqm.num_variables))
     for g in range(config.ngauges[iter]):
-        a = np.sign(np.random.rand(num_nodes) - 0.5)
+        a = np.sign(np.random.rand(bqm.num_variables) - 0.5)
         if config.embedding is None:
             config.embedding = minorminer.find_embedding(
                 bqm_nx, sampler.to_networkx_graph()
             )
+        # config.embedding = minorminer.find_embedding(
+        #     bqm_nx, sampler.to_networkx_graph()
+        # )
         th, tJ = dwe.embed_ising(
             nx.classes.function.get_node_attributes(bqm_nx, "h_bias"),
             nx.classes.function.get_edge_attributes(bqm_nx, "weight"),
@@ -154,10 +201,11 @@ def decode_qac(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
     if fix_vars:
         spins = unfix(qaresults, h_len, fixed_dict=fixed_dict)
 
-    true_spins = np.zeros(np.size(qaresults, 0), orig_len)
+    print(orig_len)
+    true_spins = np.zeros((np.size(qaresults, 0), orig_len))
     for i in range(orig_len):
         qubit_copies = []
-        for j in range(np.size(spins, 0) / orig_len):
+        for j in range(np.size(spins, axis=0) / orig_len):
             qubit_copies.append(spins[j * orig_len])
         true_spins[i] = np.sign(stat.mean((qubit_copies)))
     true_spins[np.where(true_spins == 0)] = np.random.choice([-1, 1])
@@ -171,7 +219,7 @@ def decode_copy(qaresults, h_len, orig_len, fix_vars, fixed_dict=None):
         spins = unfix(qaresults, h_len, fixed_dict=fixed_dict)
 
     multi_spins = np.zeros(
-        np.size(spins, 0) / orig_len
+        (np.size(spins, axis=0) / orig_len)
     )  # will be an exact int, not a floating point
     for i in range(np.size(multi_spins)):
         multi_spins[i] = spins[:, i * orig_len : (i + 1) * orig_len]
@@ -273,7 +321,7 @@ def anneal(config, iter, env, mu):
     """
     h, J = make_h_J(env.C_i, env.C_ij, mu, pow(config.zoom_factor, iter))
     if config.prune_vars is not None:
-        J = config.prune_vars(J, config.cutoff)
+        J = config.prune_vars(J, config.cutoff_percentile)
     if config.encode_vars is None:
         bqm, bqm_nx, fixed_dict = make_bqm(h, J, config.fix_vars)
         if config.fixed_dict is None:

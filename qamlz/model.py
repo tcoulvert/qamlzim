@@ -32,14 +32,15 @@ def evaluate(X_data, weights):
 
 
 class ModelConfig:
-    def __init__(self, n_iterations=10, zoom_factor=0.5):
+    def __init__(self, n_iterations=10):
         self.n_iterations = n_iterations
-        self.zoom_factor = zoom_factor
+        self.zoom_factor = 0.5
         self.anneal_time = 5
 
         self.flip_higher_probs = np.array(
             [0.16, 0.08, 0.04, 0.02] + [0.01] * (n_iterations - 4)
         )
+        # self.flip_higher_probs = np.linspace(0.24, 0.01, num=n_iterations)
         self.flip_lower_probs = self.flip_higher_probs / 2
 
         self.strengths = [3.0, 1.0, 0.5, 0.2] + [0.1] * (n_iterations - 4)
@@ -55,7 +56,7 @@ class ModelConfig:
 
         self.fix_vars = True
         self.prune_vars = default_prune
-        self.cutoff = 95
+        self.cutoff_percentile = 85
         self.encode_vars = default_qac
         self.encoding_depth = 3  # from nested qac paper
         self.decode_vars = decode_qac
