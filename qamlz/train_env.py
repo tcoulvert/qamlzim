@@ -19,6 +19,7 @@ class TrainEnv:
         X_val=None,
         y_val=None,
         fidelity=7,
+        dwave_topology="pegasus",
     ):
         self.X_train = X_train
         self.y_train = y_train
@@ -40,7 +41,7 @@ class TrainEnv:
         self.sampler = DWaveSampler(
             endpoint=endpoint_url,
             token=account_token,
-            solver=dict(topology__type="pegasus"),
+            solver=dict(topology__type=dwave_topology),
         )
 
     def create_val_data(self):
