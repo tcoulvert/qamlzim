@@ -20,14 +20,23 @@ def make_h_J(C_i, C_ij, mu, sigma):
 # Independent function for simplifying problem
 # -> should hold a couple simple pruning methods
 def default_prune(J, cutoff_percentile):
-    rows, cols = np.shape(J)
-    flat_J = np.ndarray.flatten(J)
-    sign_J = np.sign(flat_J)
+    """
+    J is an adjacency matrix, but because our graph only has at most a single edge between two nodes,
+    only the upper triangle of J encodes the edge weights (ie - J[2,3] is referring to the same edge as
+    J[3,2] so we only store it once). As such, we need to compute the cutoff on only the upper triangle 
+    (the nonzero values) of J. Also, np.percentile doesn't take into account magnitude, only value, so
+    in order to not lose all negative values, we use the absolute value of J.
+    """
+    shape = np.shape(J)
+    flat_J = np.ndarray.flatten(J) 
+    print(f'started with {np.size(np.nonzero(flat_J))} non-zero edges of {np.size(J)} total edges')
     abs_J = np.abs(flat_J)
-    cutoff_val = np.percentile(abs_J, cutoff_percentile)
-    J = np.where(abs_J > cutoff_val, abs_J, 0)
+    nonzero_J = np.nonzero(abs_J) 
+    cutoff_val = np.percentile(nonzero_J, cutoff_percentile)
+    new_J = np.where(abs_J >= cutoff_val, flat_J, 0)
+    print(f'pruned down to {np.size(np.nonzero(new_J))} edges ({np.size(np.nonzero(new_J)) / np.size(J) * 100:.2f}% of total)')
 
-    return np.reshape(J * sign_J, (rows, cols))
+    return np.reshape(new_J, shape)
 
 
 # makes a dwave bqm and corresponding networkx graph
@@ -76,8 +85,9 @@ def make_bqm(h, J, fix_vars, prune_vars, cutoff_percentile):
     fixed_dict = None
     if fix_vars:
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
-        if fixed_dict == {}:
+        if fixed_dict == {} or len(fixed_dict) < (np.size(h) // 2):
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
+        print('fixed_dict len = %d' % len(fixed_dict))
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
             bqm_nx.remove_node(i)
@@ -140,7 +150,6 @@ def default_copy(h, J, fix_vars, prune_vars, cutoff_percentile, C):
 
 
 # adjust weights
-# why???
 def scale_weights(th, tJ, strength):
     for k in list(th.keys()):
         th[k] /= strength
@@ -268,9 +277,7 @@ def anneal(config, iter, env, mu):
             config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
         )
 
-        print(np.min(energies))
-        print(np.max(energies))
-        print(spin_samples)
+        print('min energy = %d, max energy = %d' % (np.min(energies), np.max(energies)))
 
         if config.fix_vars is not None:
             spin_samples = unfix(spin_samples, np.size(h), fixed_dict=fixed_dict)

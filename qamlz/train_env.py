@@ -23,11 +23,11 @@ class TrainEnv:
     ):
         self.X_train = X_train
         self.y_train = y_train
-        if X_val is None:
-            self.create_val_data()
-        else:
-            self.X_val = X_val
-            self.y_val = y_val
+        # if X_val is None:
+        #     self.create_val_data()
+        # else:
+        #     self.X_val = X_val
+        #     self.y_val = y_val
         self.train_size = np.shape(self.X_train)[0]
 
         self.fidelity = fidelity
