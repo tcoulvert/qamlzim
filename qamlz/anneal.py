@@ -28,13 +28,11 @@ def default_prune(J, cutoff_percentile):
     in order to not lose all negative values, we use the absolute value of J.
     """
     shape = np.shape(J)
-    flat_J = np.ndarray.flatten(J) 
-    print(f'started with {np.size(np.nonzero(flat_J))} non-zero edges of {np.size(J)} total edges')
+    flat_J = np.ndarray.flatten(J)
     abs_J = np.abs(flat_J)
-    nonzero_J = np.nonzero(abs_J) 
-    cutoff_val = np.percentile(nonzero_J, cutoff_percentile)
-    new_J = np.where(abs_J >= cutoff_val, flat_J, 0)
-    print(f'pruned down to {np.size(np.nonzero(new_J))} edges ({np.size(np.nonzero(new_J)) / np.size(J) * 100:.2f}% of total)')
+    triu_abs_J = np.abs(J[np.triu_indices(shape[0])])
+    cutoff_val = np.percentile(triu_abs_J, cutoff_percentile)
+    new_J = np.where(abs_J > cutoff_val, flat_J, 0)
 
     return np.reshape(new_J, shape)
 
@@ -277,7 +275,7 @@ def anneal(config, iter, env, mu):
             config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
         )
 
-        print('min energy = %d, max energy = %d' % (np.min(energies), np.max(energies)))
+        print('min energy = %d, max energy = %d' % (np.amin(energies), np.amax(energies)))
 
         if config.fix_vars is not None:
             spin_samples = unfix(spin_samples, np.size(h), fixed_dict=fixed_dict)
