@@ -21,6 +21,36 @@ class TrainEnv:
         fidelity=7,
         dwave_topology="pegasus",
     ):
+        """
+        Configures the hyperparameters for the model. In essence, this controls how
+        the model learns.
+
+        Parameters:
+        - X_train           Input Events x Params dataset (given in Scikit-learn's format).
+        - y_train           Input Classification dataset (given in Scikit-learn's format).
+        - endpoint_url      The url associated with the D-Wave machine desired.
+        - account_token     Access token for D-Wave machines associated with your account.
+        - X_val             (Optional) Validation Events x Params dataset 
+                            (given in Scikit-learn's format).
+        - y_val             (Optional) Validation Classification dataset 
+                            (given in Scikit-learn's format).
+        - fidelity          (Optional) Number of copies of parameter to make for zooming.
+        - dwave_topology    (Optional) Architecture of the desired D-Wave machine. 
+                            (Possible options defined in D-Wave documentation.)
+
+        Environment Vars:
+        - X_train           Dataset of Events x Params used solely for training.
+        - y-train           Dataset of Classifcations used solely for training.
+        - train_size        Number of events to train on (or per group if dataset is split).
+        - fidelity          Number of copies of each parameter to make. The greater the fidelity,
+                            the more complex of a decision boundary that could be formed.
+        - fidelity_offset   Amount to shift each copy of a param. Should generally not be changed.
+        - c_i               Input dataset after the param copies have been created and shifted.
+        - C_i               c_i dotted with y_train row-wise.
+        - C_ij              c_i dotted with itself row-wise.
+        - sampler           Defines the characteristics for the desired D-Wave machine. Can be changed
+                            after understanding the Ocean SDK.
+        """
         self.X_train = X_train
         self.y_train = y_train
         # if X_val is None:
@@ -42,9 +72,14 @@ class TrainEnv:
             endpoint=endpoint_url,
             token=account_token,
             solver=dict(topology__type=dwave_topology),
-        )
+            auto_scale=True
+        ) # auto_scale set True by default
 
     def create_val_data(self):
+        """
+        Takes a small portion of the training data for validation (useful for 
+        comparing performance of error-correction schemes).
+        """
         dummy_xt, dummy_xv = np.split(
             self.X_train, [int(8 * np.size(self.X_train, 0) / 10)], 0
         )
@@ -62,12 +97,11 @@ class TrainEnv:
         use of such a change is to trick the math into allowing more nuance between a weak classifier
         that outputs 0.1 from a weak classifier that outputs 0.9 (the weak classifier outputs are continuous)
         -> thereby discretizing the weak classifier's decision into more pieces than binary.
-        """
-        """
-            This creates a periodic array to shift the outputs of the repeated weak classifier, so that there
-            is a meaning to duplicating them. You can think of each successive digit of the resulting weak classifier
-            output array as being more specific about what the continuous output was - ie >0, >0.1, >0.2 etc. This 
-            description is not exactly correct in this case but it is the same idea as what we're doing.
+
+        This then creates a periodic array to shift the outputs of the repeated weak classifier, so that there
+        is a meaning to duplicating them. You can think of each successive digit of the resulting weak classifier
+        output array as being more specific about what the continuous output was - ie >0, >0.1, >0.2 etc. This 
+        description is not exactly correct in this case but it is the same idea as what we're doing.
         """
         m_events, n_params = np.shape(
             self.X_train

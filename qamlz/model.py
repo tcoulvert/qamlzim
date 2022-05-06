@@ -9,10 +9,9 @@ from .anneal import default_prune, default_qac, decode_qac
 
 # Used to calculate the total hamiltonian of a certain problem
 def total_hamiltonian(mu, s, sigma, C_i, C_ij):
-    """Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
-    Dot products of upper triangle
-
-    TODO: Check indecies; maybe add .T
+    """
+    Derived from Eq. 9 in QAML-Z paper (ZLokapa et al.)
+    -> (Dot products of upper triangle)
     """
     ham = np.einsum("i, i", -C_i, s * sigma)
     ham = ham + np.einsum("i, i", np.einsum("ij, j", np.triu(C_ij, k=1), mu), s * sigma)
@@ -26,13 +25,55 @@ def total_hamiltonian(mu, s, sigma, C_i, C_ij):
 # Returns the ML algorithm's predictions
 def evaluate(X_data, weights):
     """
-    TODO:
+    Simply computes the percentage of correct classifications on a given dataset.
+
+    TODO: update so evaluates using the collapsed parameters? 
+          i dont remember exactly what this does, change?
     """
     return np.sign(np.dot(weights, X_data))
 
 
 class ModelConfig:
     def __init__(self, n_iterations=10):
+        """
+        Configures the hyperparameters for the model. In essence, this controls how
+        the model learns.
+
+        Parameters (of the function):
+        - n_iterations          Determines the number of repetitions for the training cycle.
+
+        Configs (Hyperpararmeters of the model):
+        - zoom_factor           Range(0,1) Controls the zooming rate per iteration. Essentially a
+                                training step; larger zoom_factor means faster to train, but 
+                                slower to settle.
+        - anneal_time           Controls the number of microseconds used by D-Wave machines;
+                                larger anneal_time means more accurate results, but each run
+                                takes more resources (D-Wave provides limited time).
+        - flip_higher_probs     Probailities of single-qubit spin-flips.
+        - flip_lower_probs      Probailities of multi-qubit spin-flips.
+        - strengths             Scaling of the qubit (h) and coupling (J) weights.
+        - energy_fractions      ????
+        - max_states            Number of spin-states to record from D-Wave per iteration.
+        - nread                 Number of times to sample the final state from D-Wave 
+                                (shouldn't be lower than 100 or else the spin-state distribution
+                                may not be properly recprded).
+        - embedding             Stores the embedding across iterations to shorten runtime
+                                (increases potential to fail early).
+        - fix_vars              Defines whether to fix and remove low-variance qubits, as
+                                described in D-Wave's fix_variables documentation.
+        - prune_vars            Method used to remove weak couplings.
+        - cutoff_percentile     Minimum percentile for couplings to NOT be removed.
+        - encode_vars           Method used to encode qubits for error-correction 
+                                (encode_qac, encode_copy, or your own).
+        - encoding_depth        Defined for NQAC as the number of copies, can be made into
+                                something else for other error-correction schemes.
+        - gamma                 Defined for NQAC as the penalty associated with differing
+                                spins for encoded-qubits corresponding to the same 
+                                logical qubit, can be made into something else 
+                                for other error-correction schemes.
+        - decode_vars           Method used to decode qubits from error-correction
+                                (decode_qac, decode_copy, or your own).
+        """
         self.n_iterations = n_iterations
         self.zoom_factor = 0.5
         self.anneal_time = 5
@@ -60,12 +101,30 @@ class ModelConfig:
 
 class Model:
     """
+    Contains the model object (the output of the machine learning).
+
     TODO: finish results dict -> add in method for final test accuracy (AUROC) computation
     """
 
     def __init__(self, config, env):
-        # add in hyperparameters in ModelConfig
-        # -> this is where user determines how the model will train
+        """
+        Initializes the model object, all initialization parameters are contained in the config and env objects.
+
+        TODO: add in hyperparameters in ModelConfig
+
+        Parameters:
+        - config            Config object that determines all training hyperparameters.
+        - env               Env object that determines all data-processing hyperparameters 
+                            (there are very few data hyperparameters).
+
+        Model Vars:
+        - config            Config object that determines all training hyperparameters.
+        - env               Env object that determines all data-processing hyperparameters 
+                            (there are very few data hyperparameters).
+        - start_time        Records the time the model began training, useful for data storage.
+        - anneal_results    Output dict of simple accuracies (accuracies computed with evaluate).
+        - mus_dict          Output dict of optimized weightings (the actual classifier trained).
+        """
         self.config = config
         self.env = env
 
@@ -74,6 +133,16 @@ class Model:
         self.mus_dict = {}
 
     def pick_excited_states(self, iter, excited_states, mu):
+        """
+        Selects spin states to keep dependent upon their associated energy.
+
+        TODO:
+
+        Parameters:
+        - iter              Current iteration of the training.
+        - excited_states    Obtained spins of a given read from D-Wave. 
+        - mu                Spins of qubits for this iteration.
+        """
         new_mus = []
         for excited_state in excited_states:
             new_sigma = pow(self.config.zoom_factor, iter + 1)
@@ -100,6 +169,8 @@ class Model:
 
     def train(self):
         """
+        Performs the training of the ML model.
+
         TODO:
         """
         mus = [np.ones(np.size(self.env.C_i))]
