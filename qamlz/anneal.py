@@ -374,7 +374,7 @@ def anneal(config, iter, env, mu):
 
     Parameters:
     - config       Configuration struct (hold many useful config params)
-    - iter         Declares the current iteration within the training method. This is needed 
+    - iter         Declares the current iteration within the training method. This is needed
                    as some configuration parameters are per-iteration arrays.
     - env          Env object that determines all data-processing hyperparameters.
     - mu           Vector of expected values of qubit spins.

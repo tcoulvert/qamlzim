@@ -4,10 +4,10 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='qamlz',
-    version='1.2.0',
-    description='Binary Classifier trained with D-Wave\'s Quantum Annealers.',
-    packages=find_packages(include=['qamlz']),
+    name="qamlz",
+    version="1.2.0",
+    description="Binary Classifier trained with D-Wave's Quantum Annealers.",
+    packages=find_packages(include=["qamlz"]),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -22,7 +22,7 @@ setup(
         "dwave-ocean-sdk >= 4.2.0",
     ],
     extras_require={
-        "dev":[
+        "dev": [
             "pytest >= 3.7",
             "check-manifest >= 0.47",
         ],

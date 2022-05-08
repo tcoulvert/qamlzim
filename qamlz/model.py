@@ -91,14 +91,11 @@ class ModelConfig:
         self.cutoff_percentile = 85
         self.encode_vars = default_qac
         self.encoding_depth = 3  # from nested qac paper
-        self.gammas = np.linspace(   # from nested qac paper, defines strength of same logical-qubit couplings
-            1, 
-            0.1, 
-            num=10, 
-            endpoint=True
+        self.gammas = np.linspace(  # from nested qac paper, defines strength of same logical-qubit couplings
+            1, 0.1, num=10, endpoint=True
         )
         self.gamma = (
-            1       # from nested qac paper, defines strength of same logical-qubit couplings
+            1  # from nested qac paper, defines strength of same logical-qubit couplings
         )
         self.decode_vars = decode_qac
 
@@ -152,7 +149,7 @@ class Model:
             dwave_shift_energy = total_hamiltonian(
                 mu, excited_state, new_sigma, self.env.C_i, self.env.C_ij
             )
-            
+
             for idx in range(np.size(excited_state)):
                 no_shift_state = np.copy(excited_state)
                 no_shift_state[idx] = 0
@@ -177,7 +174,9 @@ class Model:
                         energy_flips[idx] = 0
 
             flip_prob = self.config.flip_probs[iter]
-            overtrain_flips = np.random.choice([-1, 1], size=np.size(energy_flips), p=[flip_prob, 1 - flip_prob])
+            overtrain_flips = np.random.choice(
+                [-1, 1], size=np.size(energy_flips), p=[flip_prob, 1 - flip_prob]
+            )
             new_state = excited_state * energy_flips * overtrain_flips
             new_mus.append(mu + new_state * new_sigma)
 
@@ -196,7 +195,9 @@ class Model:
             for mu in mus:
                 excited_states_arr = anneal(self.config, iter, self.env, mu)
                 for excited_states in excited_states_arr:
-                    new_mus_arr.append(self.pick_excited_states(iter, excited_states, mu))
+                    new_mus_arr.append(
+                        self.pick_excited_states(iter, excited_states, mu)
+                    )
             accuracies = np.zeros(len(new_mus_arr))
             idx = 0
             for new_mus in new_mus_arr:
