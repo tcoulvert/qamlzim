@@ -30,12 +30,12 @@ class TrainEnv:
         - y_train           Input Classification dataset (given in Scikit-learn's format).
         - endpoint_url      The url associated with the D-Wave machine desired.
         - account_token     Access token for D-Wave machines associated with your account.
-        - X_val             (Optional) Validation Events x Params dataset 
+        - X_val             (Optional) Validation Events x Params dataset
                             (given in Scikit-learn's format).
-        - y_val             (Optional) Validation Classification dataset 
+        - y_val             (Optional) Validation Classification dataset
                             (given in Scikit-learn's format).
         - fidelity          (Optional) Number of copies of parameter to make for zooming.
-        - dwave_topology    (Optional) Architecture of the desired D-Wave machine. 
+        - dwave_topology    (Optional) Architecture of the desired D-Wave machine.
                             (Possible options defined in D-Wave documentation.)
 
         Environment Vars:
@@ -72,12 +72,12 @@ class TrainEnv:
             endpoint=endpoint_url,
             token=account_token,
             solver=dict(topology__type=dwave_topology),
-            auto_scale=True
-        ) # auto_scale set True by default
+            auto_scale=True,
+        )  # auto_scale set True by default
 
     def create_val_data(self):
         """
-        Takes a small portion of the training data for validation (useful for 
+        Takes a small portion of the training data for validation (useful for
         comparing performance of error-correction schemes).
         """
         dummy_xt, dummy_xv = np.split(
@@ -100,7 +100,7 @@ class TrainEnv:
 
         This then creates a periodic array to shift the outputs of the repeated weak classifier, so that there
         is a meaning to duplicating them. You can think of each successive digit of the resulting weak classifier
-        output array as being more specific about what the continuous output was - ie >0, >0.1, >0.2 etc. This 
+        output array as being more specific about what the continuous output was - ie >0, >0.1, >0.2 etc. This
         description is not exactly correct in this case but it is the same idea as what we're doing.
         """
         m_events, n_params = np.shape(

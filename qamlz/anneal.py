@@ -33,7 +33,7 @@ def default_prune(J, cutoff_percentile):
     """
     J is an adjacency matrix, but because our graph only has at most a single edge between two nodes,
     only the upper triangle of J encodes the edge weights (ie - J[2,3] is referring to the same edge as
-    J[3,2] so we only store it once). As such, we need to compute the cutoff on only the upper triangle 
+    J[3,2] so we only store it once). As such, we need to compute the cutoff on only the upper triangle
     (the nonzero values) of J. Also, np.percentile doesn't take into account magnitude, only value, so
     in order to not lose all negative values, we use the absolute value of J.
 
@@ -109,9 +109,9 @@ def make_bqm(h, J, fix_vars, prune_vars, cutoff_percentile):
     if fix_vars:
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
         if fixed_dict == {} or len(fixed_dict) < (np.size(h) // 2):
-            print('lossely fixed')
+            print("lossely fixed")
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
-        print('fixed_dict len = %d' % len(fixed_dict))
+        print("fixed_dict len = %d" % len(fixed_dict))
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
             bqm_nx.remove_node(i)
@@ -156,8 +156,8 @@ def default_qac(h, J, fix_vars, prune_vars, cutoff_percentile, C, gamma):
     - C                     Same as encoding_depth: Defined for NQAC as the number of copies, can be made into
                             something else for other error-correction schemes.
     - gamma                 Defined for NQAC as the penalty associated with differing
-                            spins for encoded-qubits corresponding to the same 
-                            logical qubit, can be made into something else 
+                            spins for encoded-qubits corresponding to the same
+                            logical qubit, can be made into something else
                             for other error-correction schemes.
     """
     rows, cols = np.shape(J)
@@ -296,7 +296,7 @@ def unfix(spin_samples, h_len, fixed_dict):
     Parameters:
     - spin_samples          Obtained spins of all reads from D-Wave.
     - h_len                 Number of nodes in the graph sent to D-Wave.
-    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending 
+    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending
                             D-Wave the graph in the dwave_connect function).
     """
     spin_samples = np.zeros((np.size(spin_samples, 0), h_len))
@@ -322,7 +322,7 @@ def decode_qac(spin_samples, enc_h_len, orig_len, fix_vars, fixed_dict=None):
     - enc_h_len             Number of nodes in the graph sent to D-Wave (after NQAC encoding).
     - orig_len              Number of nodes originally in the graph (before NQAC encoding).
     - fix_vars              Boolean of whether to fix any nodes using D-Wave's method.
-    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending 
+    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending
                             D-Wave the graph in the dwave_connect function).
     """
     if fix_vars:
@@ -349,7 +349,7 @@ def decode_copy(spin_samples, h_len, orig_len, fix_vars, fixed_dict=None):
     - enc_h_len             Number of nodes in the graph sent to D-Wave (after copying).
     - orig_len              Number of nodes originally in the graph (before NQAC encoding).
     - fix_vars              Boolean of whether to fix any nodes using D-Wave's method.
-    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending 
+    - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending
                             D-Wave the graph in the dwave_connect function).
     """
     if fix_vars:
@@ -374,10 +374,10 @@ def anneal(config, iter, env, mu):
 
     Parameters:
     - config       Configuration struct (hold many useful config params)
-    - iter         Declares the current iteration within the training method.
-    - env          The TrainEnv variable that holds the environment (data) used for training.
+    - iter         Declares the current iteration within the training method. This is needed 
+                   as some configuration parameters are per-iteration arrays.
+    - env          Env object that determines all data-processing hyperparameters.
     - mu           Vector of expected values of qubit spins.
-                   This is needed because some configuration parameters are per-iteration arrays.
     """
     h, J = make_h_J(env.C_i, env.C_ij, mu, pow(config.zoom_factor, iter))
     if config.encode_vars is None:
@@ -394,7 +394,9 @@ def anneal(config, iter, env, mu):
         spin_samples, energies = dwave_connect(
             config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
         )
-        print('min energy = %d, max energy = %d' % (np.amin(energies), np.amax(energies)))
+        print(
+            "min energy = %d, max energy = %d" % (np.amin(energies), np.amax(energies))
+        )
 
         if config.fix_vars is not None:
             spin_samples = unfix(spin_samples, np.size(h), fixed_dict=fixed_dict)
@@ -430,7 +432,10 @@ def anneal(config, iter, env, mu):
             fixed_dict=fixed_dict,
         )
         if len(np.shape(spin_samples)) == 2:
-            print('min energy = %d, max energy = %d' % (np.amin(energies), np.amax(energies)))
+            print(
+                "min energy = %d, max energy = %d"
+                % (np.amin(energies), np.amax(energies))
+            )
             if np.size(spin_samples, axis=0) > config.max_states[iter]:
                 excited_states_arr = [spin_samples[-config.max_states[iter] :]]
             else:
@@ -439,7 +444,10 @@ def anneal(config, iter, env, mu):
             excited_states_arr = []
             if np.size(spin_samples, axis=1) > config.max_states[iter]:
                 for i in range(np.size(spin_samples, 0)):
-                    print('%d: min energy = %d, max energy = %d' % (i, np.amin(energies[i]), np.amax(energies[i])))
+                    print(
+                        "%d: min energy = %d, max energy = %d"
+                        % (i, np.amin(energies[i]), np.amax(energies[i]))
+                    )
                     excited_states_arr[i] = spin_samples[i][-config.max_states[iter] :]
             else:
                 for i in range(np.size(spin_samples, 0)):
