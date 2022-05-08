@@ -23,6 +23,7 @@ def make_h_J(C_i, C_ij, mu, sigma):
     """
     h = 2 * sigma * (np.einsum("ij, j", C_ij, mu) - C_i)
     J = 2 * np.triu(C_ij, k=1) * pow(sigma, 2)
+    print('cool')
 
     return h, J
 
@@ -273,7 +274,7 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     qaresult = sampler.sample_ising(
         th,
         tJ,
-        num_reads=config.nread,
+        num_reads=config.num_reads,
         annealing_time=anneal_time,
         answer_mode="histogram",
     )

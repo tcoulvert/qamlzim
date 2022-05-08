@@ -39,7 +39,7 @@ class ModelConfig:
         Configures the hyperparameters for the model. In essence, this controls how
         the model learns.
 
-        TODO: change to flip_probs
+        TODO:
 
         Parameters (of the function):
         - n_iterations          Determines the number of repetitions for the training cycle.
@@ -54,9 +54,9 @@ class ModelConfig:
         - flip_probs            Probailities of random spin-flips; used to prevent overtraining.
         - strengths             Scaling of the qubit (h) and coupling (J) weights.
         - max_states            Number of spin-states to record from D-Wave per iteration.
-        - nread                 Number of times to sample the final state from D-Wave
+        - num_reads             Number of times to sample the final state from D-Wave
                                 (shouldn't be lower than 100 or else the spin-state distribution
-                                may not be properly recprded).
+                                may not be properly recorded).
         - embedding             Stores the embedding across iterations to shorten runtime
                                 (increases potential to fail early).
         - fix_vars              Defines whether to fix and remove low-variance qubits, as
@@ -67,10 +67,10 @@ class ModelConfig:
                                 (encode_qac, encode_copy, or your own).
         - encoding_depth        Defined for NQAC as the number of copies, can be made into
                                 something else for other error-correction schemes.
-        - gamma                 Defined for NQAC as the penalty associated with differing
+        - gamma                 Range(0,1] Defined for NQAC as the penalty associated with differing
                                 spins for encoded-qubits corresponding to the same
-                                logical qubit, can be made into something else
-                                for other error-correction schemes.
+                                logical qubit, can be made into something else for other
+                                error-correction schemes.
         - decode_vars           Method used to decode qubits from error-correction
                                 (decode_qac, decode_copy, or your own).
         """
@@ -82,7 +82,7 @@ class ModelConfig:
 
         self.strengths = [3.0, 1.0, 0.5, 0.2] + [0.1] * (n_iterations - 4)
         self.max_states = [16, 4] + [1] * (n_iterations - 2)
-        self.nread = 200
+        self.num_reads = 200
 
         self.embedding = None
 

@@ -40,7 +40,9 @@ class TrainEnv:
 
         Environment Vars:
         - X_train           Dataset of Events x Params used solely for training.
-        - y-train           Dataset of Classifcations used solely for training.
+        - y_train           Dataset of Classifcations used solely for training.
+        - X_val             Dataset of Events x Params used solely for validation.
+        - y_val             Dataset of Classifcations used solely for validation.
         - train_size        Number of events to train on (or per group if dataset is split).
         - fidelity          Number of copies of each parameter to make. The greater the fidelity,
                             the more complex of a decision boundary that could be formed.
