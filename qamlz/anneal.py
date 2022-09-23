@@ -10,7 +10,7 @@ import statistics as stat
 import dwave.preprocessing.lower_bounds as dwplb
 import dwave.embedding as dwe
 
-# Makes the h and J np arrays for use in creating the bqm and networkx graph
+
 def make_h_J(C_i, C_ij, mu, sigma):
     """
     Creates the node (h) and edge (J) weightings for use in building the problem graph.
@@ -23,13 +23,10 @@ def make_h_J(C_i, C_ij, mu, sigma):
     """
     h = 2 * sigma * (np.einsum("ij, j", C_ij, mu) - C_i)
     J = 2 * np.triu(C_ij, k=1) * pow(sigma, 2)
-    print('cool')
 
     return h, J
 
 
-# Independent function for simplifying problem
-# -> should hold a couple simple pruning methods
 def default_prune(J, cutoff_percentile):
     """
     J is an adjacency matrix, but because our graph only has at most a single edge between two nodes,
@@ -52,7 +49,6 @@ def default_prune(J, cutoff_percentile):
     return np.reshape(new_J, shape)
 
 
-# makes a dwave bqm and corresponding networkx graph
 def make_bqm(h, J, fix_vars, prune_vars, cutoff_percentile):
     """
     Creates the BQM and associated nx graph. The two differ in that fixed nodes
@@ -108,24 +104,27 @@ def make_bqm(h, J, fix_vars, prune_vars, cutoff_percentile):
     )
     fixed_dict = None
     if fix_vars:
+        # print('num nodes before = %d' % bqm.num_variables)
         lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=True)
         if fixed_dict == {} or len(fixed_dict) < (np.size(h) // 2):
-            print("lossely fixed")
+            print("loosely fixed")
             lowerE, fixed_dict = dwplb.roof_duality(bqm, strict=False)
-        print("fixed_dict len = %d" % len(fixed_dict))
+        # print("fixed_dict len = %d" % len(fixed_dict))
         for i in fixed_dict.keys():
             bqm.fix_variable(i, fixed_dict[i])
             bqm_nx.remove_node(i)
-            bqm_nx.add_node(i, h_bias=fixed_dict[i])
+            # bqm_nx.add_node(i, h_bias=fixed_dict[i])
+        # print('num nodes after = %d' % bqm.num_variables)
 
-    print(
-        "nx node num = %d \ndw node num = %d"
-        % (bqm_nx.number_of_nodes(), bqm.num_variables)
-    )
-    print(
-        "nx edge num = %d \ndw edge num = %d"
-        % (bqm_nx.number_of_edges(), bqm.num_interactions)
-    )
+    # print(
+    #     "nx node num = %d \ndw node num = %d"
+    #     % (bqm_nx.number_of_nodes(), bqm.num_variables)
+    # )
+    # print(
+    #     "nx edge num = %d \ndw edge num = %d"
+    #     % (bqm_nx.number_of_edges(), bqm.num_interactions)
+    # )
+    print(f'num nodes = {bqm.num_variables} \n num edges = {bqm.num_interactions}')
     if GRAPHS:
         nx.write_graphml(
             bqm_nx,
@@ -136,8 +135,6 @@ def make_bqm(h, J, fix_vars, prune_vars, cutoff_percentile):
     return bqm, bqm_nx, fixed_dict
 
 
-# Independent function for quantum error correction
-# -> should hold a single correction scheme to start (can always add)
 def default_qac(h, J, fix_vars, prune_vars, cutoff_percentile, C, gamma):
     """
     Encodes the logical qubits with the NQAC method.
@@ -179,7 +176,6 @@ def default_qac(h, J, fix_vars, prune_vars, cutoff_percentile, C, gamma):
     return make_bqm(qa_h, qa_J, fix_vars, prune_vars, cutoff_percentile)
 
 
-# Used to compare/benchmark the performance of the error correction
 def default_copy(h, J, fix_vars, prune_vars, cutoff_percentile, C):
     """
     Encodes the logical qubits with the copy method.
@@ -203,7 +199,6 @@ def default_copy(h, J, fix_vars, prune_vars, cutoff_percentile, C):
     return make_bqm(h, cp_J, fix_vars, prune_vars, cutoff_percentile)
 
 
-# adjust weights
 def scale_weights(th, tJ, strength):
     """
     Scales the weightings dependent upon the iteration. It is unclear
@@ -222,7 +217,6 @@ def scale_weights(th, tJ, strength):
     return th, tJ
 
 
-# Does the actual DWave annealing and connecting
 def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     """
     Handles all the connection to D-Wave, including:
@@ -289,7 +283,6 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx, anneal_time):
     return samples, energies
 
 
-# Modifies results by undoing variable fixing
 def unfix(spin_samples, h_len, fixed_dict):
     """
     Unpacks the qubits fixed using fix_vars.
@@ -300,7 +293,7 @@ def unfix(spin_samples, h_len, fixed_dict):
     - fixed_dict            Dictionary of fixed nodes (fixed just prior to sending
                             D-Wave the graph in the dwave_connect function).
     """
-    spin_samples = np.zeros((np.size(spin_samples, 0), h_len))
+    spin_samples = np.zeros((np.size(spin_samples, axis=0), h_len))
     j = 0
     for i in range(h_len):
         if i in fixed_dict:
@@ -312,8 +305,6 @@ def unfix(spin_samples, h_len, fixed_dict):
     return spin_samples
 
 
-# Modifies results by undoing variable encoding (qac method)
-#   -> uses majority voting
 def decode_qac(spin_samples, enc_h_len, orig_len, fix_vars, fixed_dict=None):
     """
     Decodes the qubits encoded with the NQAC method.
@@ -340,7 +331,6 @@ def decode_qac(spin_samples, enc_h_len, orig_len, fix_vars, fixed_dict=None):
     return true_spins
 
 
-# Modifies results by undoing variable encoding (copy method)
 def decode_copy(spin_samples, h_len, orig_len, fix_vars, fixed_dict=None):
     """
     Decodes the qubits encoded with the copy method.
@@ -385,13 +375,13 @@ def anneal(config, iter, env, mu):
         bqm, bqm_nx, fixed_dict = make_bqm(
             h, J, config.fix_vars, config.prune_vars, config.cutoff_percentile
         )
+        if len(fixed_dict) == np.size(h):
+            spin_samples = np.zeros(len(fixed_dict))
+            for k, v in fixed_dict.items():
+                spin_samples[k] = v
+            
+            return [np.vstack((spin_samples, spin_samples))] # change to tile, maybe keep same nreads shape
 
-        # if len(fixed_dict) != np.size(h):
-        #     spin_samples, energies = dwave_connect(
-        #         config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
-        #     )
-        # else:
-        #     spin_samples, energies = [], 0
         spin_samples, energies = dwave_connect(
             config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
         )
@@ -416,12 +406,20 @@ def anneal(config, iter, env, mu):
             config.encoding_depth,
             config.gamma,
         )
-        # if len(fixed_dict) != config.encoding_depth * orig_len:
-        #     spin_samples, energies = dwave_connect(
-        #         config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
-        #     )
-        # else:
-        #     spin_samples, energies = [], 0
+        if len(fixed_dict) == config.encoding_depth * orig_len:
+            enc_spin_samples = np.zeros(len(fixed_dict))
+            for k, v in fixed_dict.items():
+                enc_spin_samples[k] = v
+            
+            sub_spin_samples = np.vstack(np.split(enc_spin_samples, config.encoding_depth, axis=0))
+            spin_samples = np.zeros(orig_len)
+            for i in range(orig_len):
+                spin_samples[i] = np.sign(np.sum(sub_spin_samples[:, i]))
+                if spin_samples[i] == 0:
+                    spin_samples[i] = np.random.choice([-1, 1])
+            # HERE
+            return [np.vstack((spin_samples, spin_samples))] # change to tile, maybe keep same nreads shape
+
         spin_samples, energies = dwave_connect(
             config, iter, env.sampler, bqm, bqm_nx, config.anneal_time
         )
@@ -432,13 +430,14 @@ def anneal(config, iter, env, mu):
             config.fix_vars,
             fixed_dict=fixed_dict,
         )
+        # print(spin_samples)
         if len(np.shape(spin_samples)) == 2:
             print(
                 "min energy = %d, max energy = %d"
                 % (np.amin(energies), np.amax(energies))
             )
             if np.size(spin_samples, axis=0) > config.max_states[iter]:
-                excited_states_arr = [spin_samples[-config.max_states[iter] :]]
+                excited_states_arr = [np.vstack((spin_samples[0, :], spin_samples[-config.max_states[iter] :, :]))]
             else:
                 excited_states_arr = [spin_samples]
         elif len(np.shape(spin_samples)) == 3:
@@ -449,7 +448,7 @@ def anneal(config, iter, env, mu):
                         "%d: min energy = %d, max energy = %d"
                         % (i, np.amin(energies[i]), np.amax(energies[i]))
                     )
-                    excited_states_arr[i] = spin_samples[i][-config.max_states[iter] :]
+                    excited_states_arr[i] = [*spin_samples[i][0, :], *spin_samples[i][-config.max_states[iter] :, :]]
             else:
                 for i in range(np.size(spin_samples, 0)):
                     excited_states_arr[i] = spin_samples[i]

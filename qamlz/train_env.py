@@ -10,6 +10,11 @@ class TrainEnv:
     # -> clear to both user and code what each array is
     # X_train, y_train should be formatted like scikit-learn data arrays are
     # -> X_train is the train data, y_train is the train labels
+    """
+    Contains the model object (the output of the machine learning).
+
+    TODO: write this
+    """
     def __init__(
         self,
         X_train,
@@ -20,6 +25,8 @@ class TrainEnv:
         y_val=None,
         fidelity=7,
         dwave_topology="pegasus",
+        val=False,
+        multi=False
     ):
         """
         Configures the hyperparameters for the model. In essence, this controls how
@@ -27,7 +34,8 @@ class TrainEnv:
 
         Parameters:
         - X_train           Input Events x Params dataset (given in Scikit-learn's format).
-        - y_train           Input Classification dataset (given in Scikit-learn's format).
+        - y_train           Input Classification dataset (given in Scikit-learn's format, should have
+                            one class as -1 and the other as 1).
         - endpoint_url      The url associated with the D-Wave machine desired.
         - account_token     Access token for D-Wave machines associated with your account.
         - X_val             (Optional) Validation Events x Params dataset
@@ -55,11 +63,9 @@ class TrainEnv:
         """
         self.X_train = X_train
         self.y_train = y_train
-        # if X_val is None:
-        #     self.create_val_data()
-        # else:
-        #     self.X_val = X_val
-        #     self.y_val = y_val
+        self.X_val = X_val
+        self.y_val = y_val
+
         self.train_size = np.shape(self.X_train)[0]
 
         self.fidelity = fidelity
@@ -68,7 +74,21 @@ class TrainEnv:
         self.c_i = None
         self.C_i = None
         self.C_ij = None
-        self.data_preprocess()
+        
+        self.multi = multi
+        if multi is True:
+            self.y_true = y_val
+            self.multi_preprocess()
+        else:
+            self.data_preprocess()
+        
+        self.val = val  # added with val
+        if val is True:  # added with val
+            self.c_i_val = None  # added with val
+            if multi is True:
+                self.multival_preprocess()
+            else:
+                self.val_preprocess()  # added with val
 
         self.sampler = DWaveSampler(
             endpoint=endpoint_url,
@@ -126,3 +146,66 @@ class TrainEnv:
         C_ij = np.einsum("ji,jk", c_i, c_i)
 
         self.C_i, self.C_ij = C_i, C_ij
+
+    def val_preprocess(self):  # added with val
+        """
+        Same as above but for validation data.
+        """
+        m_events, n_params = np.shape(
+            self.X_val
+        )  # [M events (rows) x N parameters (columns)]
+
+        c_i = np.repeat(
+            self.X_val, repeats=self.fidelity, axis=1
+        )  # [M events (rows) x N*fidelity parameters (columns)]
+
+        offset_array = self.fidelity_offset * (
+            np.tile(np.arange(self.fidelity), m_events * n_params) - self.fidelity // 2
+        )
+        c_i = np.sign(np.ndarray.flatten(c_i, order="C") - offset_array) / (
+            n_params * self.fidelity
+        )
+        c_i = np.reshape(c_i, (m_events, n_params * self.fidelity))
+        
+        self.c_i_val = c_i
+
+    def multi_preprocess(self):
+        """
+        Same as above but for multiclass problems.
+        """
+        m_events, n_params = np.shape(
+            self.X_train
+        )  # [M events (rows) x N parameters (columns)]
+
+        c_i = np.repeat(
+            self.X_train, repeats=np.amax(self.y_train), axis=1
+        )  # [M events (rows) x N*classes parameters (columns)]
+        self.c_i = c_i
+
+        C_i = np.zeros(np.shape(c_i)[1])
+        y_tr = np.zeros((np.size(self.y_train, np.amax(self.y_train))))
+        x = np.ones(np.size(self.y_train))
+        y = -np.ones(np.size(self.y_train))
+        for j in range(np.amax(self.y_train)):
+            y_tr[:, j] = np.where(self.y_train == j, x, y)
+        
+        for i in range(n_params):
+            for j in range(np.amax(self.y_train)):
+                C_i[i+j] = np.einsum('i, i', c_i[:, i+j],  y_tr[j])
+        C_ij = np.einsum("ji,jk", c_i, c_i)
+
+        self.y_train = y_tr
+        self.C_i, self.C_ij = C_i, C_ij
+
+    def multival_preprocess(self):  # added with val
+        """
+        Same as above but for validation data of multiclass problems.
+        """
+        m_events, n_params = np.shape(
+            self.X_val
+        )  # [M events (rows) x N parameters (columns)]
+
+        c_i = np.repeat(
+            self.X_val, repeats=np.amax(self.y_val), axis=1
+        )  # [M events (rows) x N*classes parameters (columns)]
+        self.c_i_val = c_i
