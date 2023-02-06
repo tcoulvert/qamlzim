@@ -27,7 +27,7 @@ setup(
             "check-manifest >= 0.47",
         ],
     },
-    url="https://github.com/tcoulvert/qaml-z",
+    url="https://github.com/tcoulvert/qamlzim",
     author="Thomas Sievert",
-    author_email="tcsievert@gmail.com",
+    author_email="63161166+tcoulvert@users.noreply.github.com",
 )

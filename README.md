@@ -1,12 +1,12 @@
-# QAML-Z
-This is a supervised ML algorithm used to train a Binary Classifier on D-Wave's Quantum Annealers. The library has been set up to be compatible with Scikit-Learn's data representation. The algortihm is intended to be generalizable to any Binary ML problem.
+# QAML-ZIM
+Quantum Adiabatic Machine Learning with Zooming IMproved. This is a supervised ML algorithm used to train a Binary Classifier on D-Wave's Quantum Annealers. The library has been set up to be compatible with Scikit-Learn's data representation. The algortihm is intended to be generalizable to any Binary ML problem.
 
 In order to run the program you'll need D-Wave credentials, these can be obtained at https://cloud.dwavesys.com/leap/signup/. You'll need a github account in order to sign up. This account will give you the "endpoint_url" and "account_token" referenced below.
 
 ## Installation
 Run the following to install:
 ```bash
-$ pip install qamlz
+$ pip install qamlzim
 ```
 
 ## Contributors
@@ -24,21 +24,21 @@ Special thanks to everyone who helped me develop this module
 
 ## Usage
 ```python
-import qamlz
+import qamlzim
 
 # Generate the Environment (Data) for the Model
-env = qamlz.TrainEnv(X_train, y_train, endpoint_url, account_token)
+env = qamlzim.TrainEnv(X_train, y_train, endpoint_url, account_token)
 
 # Generate the Config (Hyperparameters) for the Model
-config = qamlz.ModelConfig()
+config = qamlzim.ModelConfig()
 
 # Create the Model and begin training
-model = qamlz.Model(config, env)
+model = qamlzim.Model(config, env)
 model.train()
 ```
 
-## Developing QAML-Z
-To install qamlz, along with the tools you need to develop and run tests, run the following in your virtualenv:
+## Developing QAML-ZIM
+To install qamlzim, along with the tools you need to develop and run tests, run the following in your virtualenv:
 ```bash
 $ pip install -e .[dev]
 ```
