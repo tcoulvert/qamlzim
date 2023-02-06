@@ -106,10 +106,11 @@ def dwave_connect(config, iter, sampler, bqm, bqm_nx):
 
     h_dict = nx.classes.function.get_node_attributes(bqm_nx, "h_bias")
     J_dict = nx.classes.function.get_edge_attributes(bqm_nx, "weight")
-    for k in h_dict:
-        h_dict[k] *= a[k]
-    for u, v in J_dict:
-        J_dict[(u, v)] *= a[u] * a[v]
+    # Unsure what the commented-out code is supposed to do
+    # for k in h_dict:
+    #     h_dict[k] *= a[k]
+    # for u, v in J_dict:
+    #     J_dict[(u, v)] *= a[u] * a[v]
 
     th, tJ = dw.embedding.embed_ising(
         h_dict,
