@@ -13,8 +13,9 @@ class TrainEnv:
     """
     Contains the model object (the output of the machine learning).
 
-    TODO: write this
+    TODO:
     """
+
     def __init__(
         self,
         X_train,
@@ -25,8 +26,6 @@ class TrainEnv:
         y_val=None,
         fidelity=7,
         dwave_topology="pegasus",
-        val=False,
-        multi=False
     ):
         """
         Configures the hyperparameters for the model. In essence, this controls how
@@ -65,6 +64,8 @@ class TrainEnv:
         self.y_train = y_train
         self.X_val = X_val
         self.y_val = y_val
+        if X_val is None:
+            self.create_val_data()
 
         self.train_size = np.shape(self.X_train)[0]
 
@@ -74,22 +75,12 @@ class TrainEnv:
         self.c_i = None
         self.C_i = None
         self.C_ij = None
-        
-        self.multi = multi
-        if multi is True:
-            self.y_true = y_val
-            self.multi_preprocess()
-        else:
-            self.data_preprocess()
-        
-        self.val = val  # added with val
-        if val is True:  # added with val
-            self.c_i_val = None  # added with val
-            if multi is True:
-                self.multival_preprocess()
-            else:
-                self.val_preprocess()  # added with val
+        self.train_preprocess()
 
+        self.c_i_val = None
+        self.val_preprocess()
+
+        self.dwave_topology = dwave_topology
         self.sampler = DWaveSampler(
             endpoint=endpoint_url,
             token=account_token,
@@ -112,7 +103,7 @@ class TrainEnv:
         self.X_train, self.X_val = np.array(list(dummy_xt)), np.array(list(dummy_xv))
         self.y_train, self.y_val = np.array(list(dummy_yt)), np.array(list(dummy_yv))
 
-    def data_preprocess(self):
+    def train_preprocess(self):
         """
         This duplicates the parameters 'fidelity' times. The purpose is to turn the weak classifiers
         from outputing a single number (-1 or 1) to outputting a binary array ([-1, 1, 1,...]). The
@@ -166,46 +157,5 @@ class TrainEnv:
             n_params * self.fidelity
         )
         c_i = np.reshape(c_i, (m_events, n_params * self.fidelity))
-        
-        self.c_i_val = c_i
 
-    def multi_preprocess(self):
-        """
-        Same as above but for multiclass problems.
-        """
-        m_events, n_params = np.shape(
-            self.X_train
-        )  # [M events (rows) x N parameters (columns)]
-
-        c_i = np.repeat(
-            self.X_train, repeats=np.amax(self.y_train), axis=1
-        )  # [M events (rows) x N*classes parameters (columns)]
-        self.c_i = c_i
-
-        C_i = np.zeros(np.shape(c_i)[1])
-        y_tr = np.zeros((np.size(self.y_train, np.amax(self.y_train))))
-        x = np.ones(np.size(self.y_train))
-        y = -np.ones(np.size(self.y_train))
-        for j in range(np.amax(self.y_train)):
-            y_tr[:, j] = np.where(self.y_train == j, x, y)
-        
-        for i in range(n_params):
-            for j in range(np.amax(self.y_train)):
-                C_i[i+j] = np.einsum('i, i', c_i[:, i+j],  y_tr[j])
-        C_ij = np.einsum("ji,jk", c_i, c_i)
-
-        self.y_train = y_tr
-        self.C_i, self.C_ij = C_i, C_ij
-
-    def multival_preprocess(self):  # added with val
-        """
-        Same as above but for validation data of multiclass problems.
-        """
-        m_events, n_params = np.shape(
-            self.X_val
-        )  # [M events (rows) x N parameters (columns)]
-
-        c_i = np.repeat(
-            self.X_val, repeats=np.amax(self.y_val), axis=1
-        )  # [M events (rows) x N*classes parameters (columns)]
         self.c_i_val = c_i
