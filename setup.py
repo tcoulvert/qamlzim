@@ -4,10 +4,10 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="qamlz",
+    name="qamlzim",
     version="1.3.0",
     description="Binary Classifier trained with D-Wave's Quantum Annealers.",
-    packages=find_packages(include=["qamlz"]),
+    packages=find_packages(include=["qamlzim"]),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
